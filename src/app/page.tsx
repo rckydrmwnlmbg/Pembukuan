@@ -85,12 +85,18 @@ export default function HomePage() {
                   </dl>
                 </div>
 
-                <div className="flex items-center gap-2 border-t border-line-subtle pt-3">
+                <div className="flex flex-wrap items-center gap-2 border-t border-line-subtle pt-3">
                   <Link
                     href={`/k/${kitchen.id}/ledger`}
                     className="inline-flex h-8 items-center justify-center rounded-md bg-accent-primary px-3 text-xs font-medium text-ink-on-accent transition-colors hover:bg-accent-primary-hover"
                   >
                     Buka Buku Kas
+                  </Link>
+                  <Link
+                    href={`/k/${kitchen.id}/review`}
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-line-strong bg-surface px-3 text-xs font-medium text-ink-primary transition-colors hover:bg-surface-subtle"
+                  >
+                    Unggah & Review
                   </Link>
                   <a
                     href={`/api/k/${kitchen.id}/export/xlsx?periodId=${kitchen.periodId}`}
