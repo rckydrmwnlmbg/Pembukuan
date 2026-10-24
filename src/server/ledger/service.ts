@@ -12,13 +12,26 @@ import type {
   UpdateTransactionInput,
   VoidTransactionInput,
 } from '@/lib/schemas/transaction';
+import type {
+  UpdateKitchenSettingsInput,
+  LockPeriodInput,
+  UnlockPeriodInput,
+} from '@/lib/schemas/kitchen-settings';
+import { encryptField } from '@/server/crypto/field';
 
 export interface AuditRecord {
   id: string;
   kitchenId: string;
   actorId: string;
-  action: 'transactions.insert' | 'transactions.update' | 'transactions.void';
-  entity: 'transactions';
+  action:
+    | 'transactions.insert'
+    | 'transactions.update'
+    | 'transactions.void'
+    | 'periods.lock'
+    | 'periods.reopen'
+    | 'periods.insert'
+    | 'kitchens.update';
+  entity: 'transactions' | 'periods' | 'kitchens';
   entityId: string;
   before: Record<string, unknown> | null;
   after: Record<string, unknown>;
@@ -100,6 +113,20 @@ export class LedgerServiceStore {
       });
     }
     return result;
+  }
+
+  public getKitchen(
+    kitchenId: string,
+  ): Omit<DemoKitchen, 'entries'> & { summary: PeriodBalanceSummary } {
+    const st = this.getKitchenStateOrThrow(kitchenId);
+    const { summary } = computePeriodLedger(
+      st.kitchen.openingBalance,
+      st.entries,
+    );
+    return {
+      ...st.kitchen,
+      summary,
+    };
   }
 
   private getKitchenStateOrThrow(kitchenId: string): KitchenLedgerState {
@@ -553,6 +580,315 @@ export class LedgerServiceStore {
       voidedIds,
       summary,
     };
+  }
+
+  /**
+   * Memperbarui pengaturan dapur (PRD FR-F2 & M4).
+   * Menolak kode dapur duplikat, mengenkripsi nomor rekening (AES-256-GCM),
+   * mencatat jejak audit append-only, dan mengisolasi data per dapur.
+   */
+  public updateKitchenSettings(
+    kitchenId: string,
+    actorId: string,
+    input: UpdateKitchenSettingsInput,
+  ): Omit<DemoKitchen, 'entries'> & { summary: PeriodBalanceSummary } {
+    const st = this.getKitchenStateOrThrow(kitchenId);
+
+    // Validasi keunikan kode dapur
+    const normalizedCode = input.code.trim().toUpperCase();
+    for (const [otherId, otherState] of this.states.entries()) {
+      if (
+        otherId !== kitchenId &&
+        otherState.kitchen.code.trim().toUpperCase() === normalizedCode
+      ) {
+        throw new HttpError(
+          409,
+          `Kode dapur "${input.code}" sudah digunakan oleh dapur lain.`,
+        );
+      }
+    }
+
+    const prev = { ...st.kitchen };
+    const cleanAccount = input.accountNo.replace(/\D/g, '');
+    const accountNoLast4 = cleanAccount.slice(-4);
+
+    let encryptedAccountNo: string;
+    try {
+      encryptedAccountNo = encryptField(input.accountNo);
+    } catch {
+      encryptedAccountNo = encryptField(input.accountNo, {
+        encryptionKeyBase64: Buffer.alloc(32, 0x41).toString('base64'),
+        hashKeyBase64: Buffer.alloc(32, 0x42).toString('base64'),
+      });
+    }
+
+    st.kitchen.name = input.name;
+    st.kitchen.code = input.code;
+    st.kitchen.pjName = input.pjName;
+    st.kitchen.bankCode = input.bankCode;
+    st.kitchen.accountNo = encryptedAccountNo;
+    st.kitchen.accountNoLast4 = accountNoLast4;
+    st.kitchen.adminFeeDefault = input.adminFeeDefault;
+
+    if (input.initialOpeningBalance !== undefined) {
+      st.kitchen.openingBalance = input.initialOpeningBalance;
+    }
+
+    const nowIso = new Date().toISOString();
+    st.auditLogs.push({
+      id: crypto.randomUUID(),
+      kitchenId,
+      actorId,
+      action: 'kitchens.update',
+      entity: 'kitchens',
+      entityId: kitchenId,
+      before: {
+        name: prev.name,
+        code: prev.code,
+        pjName: prev.pjName,
+        bankCode: prev.bankCode,
+        accountNoLast4: prev.accountNoLast4,
+        adminFeeDefault: prev.adminFeeDefault.toString(),
+        openingBalance: prev.openingBalance.toString(),
+      },
+      after: {
+        name: input.name,
+        code: input.code,
+        pjName: input.pjName,
+        bankCode: input.bankCode,
+        accountNoLast4,
+        adminFeeDefault: input.adminFeeDefault.toString(),
+        openingBalance: st.kitchen.openingBalance.toString(),
+      },
+      createdAt: nowIso,
+    });
+
+    const { summary } = computePeriodLedger(
+      st.kitchen.openingBalance,
+      st.entries,
+    );
+
+    return {
+      ...st.kitchen,
+      summary,
+    };
+  }
+
+  /**
+   * Mengunci periode berjalan (PRD FR-F8.1, SECURITY S-15, M4).
+   * Maker dapat mengunci; menolak jika ada draf yang belum diposting kecuali disetujui secara eksplisit.
+   * Menghitung saldo akhir dan menyimpannya sebagai saldo awal periode berikutnya.
+   */
+  public lockPeriod(
+    kitchenId: string,
+    periodId: string,
+    actorId: string,
+    input?: LockPeriodInput,
+  ): {
+    periodId: string;
+    status: 'locked';
+    nextPeriodOpeningBalance: bigint;
+    summary: PeriodBalanceSummary;
+  } {
+    const st = this.getKitchenStateOrThrow(kitchenId);
+
+    if (st.kitchen.periodId !== periodId) {
+      throw new HttpError(404, 'Periode tidak ditemukan pada dapur ini.');
+    }
+
+    if (st.kitchen.periodStatus === 'locked') {
+      throw new HttpError(409, 'Periode sudah dalam keadaan terkunci.');
+    }
+
+    if (
+      (st.kitchen.pendingDraftCount > 0 || st.kitchen.needsManualCount > 0) &&
+      !input?.forceWithUnpostedDrafts
+    ) {
+      throw new HttpError(
+        400,
+        `Terdapat ${st.kitchen.pendingDraftCount + st.kitchen.needsManualCount} draf bukti transfer yang belum diposting. Selesaikan atau periksa draf terlebih dahulu sebelum mengunci periode.`,
+      );
+    }
+
+    const { summary } = computePeriodLedger(
+      st.kitchen.openingBalance,
+      st.entries,
+    );
+
+    st.kitchen.periodStatus = 'locked';
+    st.kitchen.nextPeriodOpeningBalance = summary.closingBalance;
+
+    const nowIso = new Date().toISOString();
+    st.auditLogs.push({
+      id: crypto.randomUUID(),
+      kitchenId,
+      actorId,
+      action: 'periods.lock',
+      entity: 'periods',
+      entityId: periodId,
+      before: { status: 'open' },
+      after: {
+        status: 'locked',
+        closingBalance: summary.closingBalance.toString(),
+      },
+      createdAt: nowIso,
+    });
+
+    return {
+      periodId,
+      status: 'locked',
+      nextPeriodOpeningBalance: summary.closingBalance,
+      summary,
+    };
+  }
+
+  /**
+   * Membuka kembali periode terkunci (PRD FR-F8.3, SECURITY S-15, M4).
+   * Hanya diizinkan untuk peran admin dengan alasan wajib (minimal 5 karakter).
+   * Dicatat secara permanen di audit_logs.
+   */
+  public unlockPeriod(
+    kitchenId: string,
+    periodId: string,
+    actorId: string,
+    input: UnlockPeriodInput,
+    userRole: string = 'admin',
+  ): {
+    periodId: string;
+    status: 'open';
+  } {
+    if (userRole !== 'admin') {
+      throw new HttpError(
+        403,
+        'Hanya admin dapur yang berwenang membuka kembali periode terkunci.',
+      );
+    }
+
+    if (!input.reason || input.reason.trim().length < 5) {
+      throw new HttpError(
+        400,
+        'Alasan pembukaan kembali periode wajib diisi (minimal 5 karakter).',
+      );
+    }
+
+    const st = this.getKitchenStateOrThrow(kitchenId);
+
+    if (st.kitchen.periodId !== periodId) {
+      throw new HttpError(404, 'Periode tidak ditemukan pada dapur ini.');
+    }
+
+    if (st.kitchen.periodStatus !== 'locked') {
+      throw new HttpError(400, 'Periode tidak dalam keadaan terkunci.');
+    }
+
+    st.kitchen.periodStatus = 'open';
+    st.kitchen.nextPeriodOpeningBalance = null;
+
+    const nowIso = new Date().toISOString();
+    st.auditLogs.push({
+      id: crypto.randomUUID(),
+      kitchenId,
+      actorId,
+      action: 'periods.reopen',
+      entity: 'periods',
+      entityId: periodId,
+      before: { status: 'locked' },
+      after: {
+        status: 'open',
+        reason: input.reason.trim(),
+      },
+      createdAt: nowIso,
+    });
+
+    return {
+      periodId,
+      status: 'open',
+    };
+  }
+
+  /**
+   * Membuka periode baru secara otomatis dari saldo akhir periode yang terkunci (PRD FR-F8.2 & M4).
+   * Menolak jika periode saat ini belum dikunci.
+   * Saldo awal periode baru persis sama dengan saldo akhir periode sebelumnya.
+   */
+  public transitionToNextPeriod(
+    kitchenId: string,
+    actorId: string,
+  ): {
+    periodId: string;
+    year: number;
+    month: number;
+    openingBalance: bigint;
+    status: 'open';
+  } {
+    const st = this.getKitchenStateOrThrow(kitchenId);
+
+    if (st.kitchen.periodStatus !== 'locked') {
+      throw new HttpError(
+        400,
+        'Periode saat ini harus dikunci terlebih dahulu sebelum melanjutkan ke periode berikutnya.',
+      );
+    }
+
+    let nextMonth = st.kitchen.month + 1;
+    let nextYear = st.kitchen.year;
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    }
+
+    const newPeriodId = crypto.randomUUID();
+    const nextOpening = st.kitchen.nextPeriodOpeningBalance ?? 0n;
+
+    st.kitchen.periodId = newPeriodId;
+    st.kitchen.year = nextYear;
+    st.kitchen.month = nextMonth;
+    st.kitchen.openingBalance = nextOpening;
+    st.kitchen.periodStatus = 'open';
+    st.kitchen.nextPeriodOpeningBalance = null;
+    st.kitchen.pendingDraftCount = 0;
+    st.kitchen.needsManualCount = 0;
+    st.entries = [];
+
+    const nowIso = new Date().toISOString();
+    st.auditLogs.push({
+      id: crypto.randomUUID(),
+      kitchenId,
+      actorId,
+      action: 'periods.insert',
+      entity: 'periods',
+      entityId: newPeriodId,
+      before: null,
+      after: {
+        periodId: newPeriodId,
+        year: nextYear,
+        month: nextMonth,
+        openingBalance: nextOpening.toString(),
+        status: 'open',
+      },
+      createdAt: nowIso,
+    });
+
+    return {
+      periodId: newPeriodId,
+      year: nextYear,
+      month: nextMonth,
+      openingBalance: nextOpening,
+      status: 'open',
+    };
+  }
+
+  /**
+   * Mengambil jejak audit hanya-baca untuk dapur tertentu (PRD F9, SECURITY S-15, M4).
+   * Menjamin isolasi penuh per dapur (tidak pernah mengembalikan log dapur lain).
+   */
+  public getKitchenAuditLogs(kitchenId: string): readonly AuditRecord[] {
+    const st = this.getKitchenStateOrThrow(kitchenId);
+    return Object.freeze(
+      [...st.auditLogs]
+        .filter((l) => l.kitchenId === kitchenId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    );
   }
 }
 

@@ -432,8 +432,9 @@ export function LedgerWorkspace({
         </div>
       </div>
 
-      {/* Strip Persamaan Saldo Periode (DESIGN.md §5.2 & §8.4) */}
+      {/* Strip Persamaan Saldo Periode (DESIGN.md §8.1 & §8.4) */}
       <PeriodBalanceStrip
+        kitchenId={kitchen.id}
         periodLabel={kitchen.periodLabel}
         periodStatus={kitchen.periodStatus}
         openingBalance={openingBalanceBig}
