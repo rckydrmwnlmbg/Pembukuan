@@ -478,7 +478,7 @@ Pemetaan token ke Tailwind: definisikan token di atas sebagai variabel CSS, lalu
 - Memakai `rounded-2xl`/`rounded-3xl`, `shadow-lg`/`shadow-xl`, `backdrop-blur`, `bg-gradient-*`, dan kelas `animate-*` bawaan untuk dekorasi.
 - Memakai komponen dari pustaka UI tanpa mengganti seluruh token dan membandingkannya dengan dokumen ini.
 
-Struktur: komponen dasar di `src/components/ui/` (Button, Input, Select, Badge, Table, Dialog, Toast, Tabs, Skeleton); komponen domain di `src/components/domain/` (LedgerTable, ReviewPanel, ReconcileEquation, DapurSwitcher, UploadDropzone). Setiap komponen dasar memiliki halaman contoh di `/dev/ui` (tidak dapat diakses di produksi).
+Struktur: komponen dasar di `src/components/ui/` (Button, Input, Select, Badge, Table, Dialog, Toast, Tabs, Skeleton); komponen domain di `src/components/domain/` (LedgerTable, ReviewPanel, PeriodEquation, DapurSwitcher, UploadDropzone). Setiap komponen dasar memiliki halaman contoh di `/dev/ui` (tidak dapat diakses di produksi).
 
 Font:
 

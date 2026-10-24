@@ -233,3 +233,29 @@ from public.transactions t
 join public.periods p
   on p.id = t.period_id
  and p.kitchen_id = t.kitchen_id;
+
+-- 13. View ringkasan persamaan saldo periode per dapur (Saldo awal + Dana masuk - Dana keluar = Saldo akhir)
+create or replace view public.v_period_summary
+with (security_invoker = true)
+as
+select
+  p.id as period_id,
+  p.kitchen_id,
+  p.year,
+  p.month,
+  p.status as period_status,
+  p.opening_balance,
+  coalesce(sum(case when t.status = 'posted' and t.debit > 0 then t.debit else 0 end), 0)::bigint as total_incoming,
+  coalesce(sum(case when t.status = 'posted' and t.credit > 0 then t.credit else 0 end), 0)::bigint as total_outgoing,
+  (
+    p.opening_balance
+    + coalesce(sum(case when t.status = 'posted' then t.debit - t.credit else 0 end), 0)
+  )::bigint as closing_balance,
+  count(t.id) filter (where t.status = 'posted' and t.debit > 0)::int as incoming_count,
+  count(t.id) filter (where t.status = 'posted' and t.credit > 0)::int as outgoing_count
+from public.periods p
+left join public.transactions t
+  on t.period_id = p.id
+ and t.kitchen_id = p.kitchen_id
+group by p.id, p.kitchen_id, p.year, p.month, p.status, p.opening_balance;
+

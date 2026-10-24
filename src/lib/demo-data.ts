@@ -233,14 +233,23 @@ export function generateDemoDataset(seed = 20261025): DemoDataset {
       const dateStr = `2026-03-${String(day).padStart(2, '0')}`;
       entries.push({
         id: `tx-${spec.code}-inc-${seqNo}`,
+        kitchenId: spec.id,
+        periodId: spec.periodId,
+        parentTransactionId: null,
         seqNo,
         txDate: dateStr,
         kind: 'incoming',
         referenceNo: null,
         description: 'PENAMBAHAN DANA DARI BGN KE VA DAPUR (CONTOH)',
+        counterpartyAccount: null,
+        counterpartyAccountLast4: null,
+        counterpartyName: null,
+        counterpartyBank: null,
         debit: 150_000_000n,
         credit: 0n,
+        note: null,
         status: 'posted',
+        version: 1,
       });
       seqNo += 1;
     }
@@ -257,31 +266,50 @@ export function generateDemoDataset(seed = 20261025): DemoDataset {
         Math.floor(rand() * ((cp.maxAmount - cp.minAmount) / 5_000)) * 5_000;
       const amount = BigInt(rawStep);
       const refNo = `202603${String(day).padStart(2, '0')}${String(kIdx + 1)}${String(seqNo).padStart(4, '0')}`;
+      const parentId = `tx-${spec.code}-out-${seqNo}`;
 
       entries.push({
-        id: `tx-${spec.code}-out-${seqNo}`,
+        id: parentId,
+        kitchenId: spec.id,
+        periodId: spec.periodId,
+        parentTransactionId: null,
         seqNo,
         txDate: dateStr,
         kind: 'outgoing',
         referenceNo: refNo,
         description: cp.descriptionTemplate(day, qty),
+        counterpartyAccount: cp.accountNo,
+        counterpartyAccountLast4: cp.accountNo.slice(-4),
+        counterpartyName: cp.name,
+        counterpartyBank: cp.bank,
         debit: 0n,
         credit: amount,
+        note: seqNo === 5 ? 'Sesuai pengajuan dapur (contoh)' : null,
         status: 'posted',
+        version: 1,
       });
       seqNo += 1;
 
       if (cp.bank !== spec.bankCode && entries.length < spec.txCountTarget) {
         entries.push({
           id: `tx-${spec.code}-adm-${seqNo}`,
+          kitchenId: spec.id,
+          periodId: spec.periodId,
+          parentTransactionId: parentId,
           seqNo,
           txDate: dateStr,
           kind: 'admin_fee',
           referenceNo: refNo, // berbagi nomor referensi yang sama dengan transaksi induk (PRD FR-F4.3)
-          description: 'ADMIN BANK',
+          description: `ADMIN BANK ${cp.bank}`,
+          counterpartyAccount: null,
+          counterpartyAccountLast4: null,
+          counterpartyName: null,
+          counterpartyBank: cp.bank,
           debit: 0n,
           credit: 6_500n,
+          note: null,
           status: 'posted',
+          version: 1,
         });
         seqNo += 1;
       }

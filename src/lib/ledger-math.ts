@@ -8,14 +8,23 @@ export type TransactionStatus = 'posted' | 'void';
 
 export interface LedgerEntryInput {
   id: string;
+  kitchenId?: string;
+  periodId?: string;
+  parentTransactionId?: string | null;
   seqNo: number;
   txDate: string; // 'YYYY-MM-DD'
   kind: TransactionKind;
   referenceNo: string | null;
   description: string;
+  counterpartyAccount?: string | null;
+  counterpartyAccountLast4?: string | null;
+  counterpartyName?: string | null;
+  counterpartyBank?: string | null;
   debit: bigint;
   credit: bigint;
+  note?: string | null;
   status: TransactionStatus;
+  version?: number;
 }
 
 export interface ComputedLedgerRow extends LedgerEntryInput {
