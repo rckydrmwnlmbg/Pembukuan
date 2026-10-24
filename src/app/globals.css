@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+:root {
+  /* Netral (DESIGN.md 3.1) */
+  --canvas: #F4F6F8;
+  --surface: #FFFFFF;
+  --surface-muted: #F8FAFB;
+  --line: #DDE2E8;
+  --line-strong: #C3CBD4;
+
+  /* Teks (DESIGN.md 3.1) */
+  --ink: #1B2430;
+  --ink-muted: #566272;
+  --ink-subtle: #7A8695;
+  --ink-on-accent: #FFFFFF;
+
+  /* Aksen tunggal Petrol (DESIGN.md 3.1) */
+  --accent: #0B4F6C;
+  --accent-hover: #093F57;
+  --accent-press: #07324A;
+  --accent-subtle: #E7F0F4;
+  --accent-line: #B9D3DE;
+
+  /* Status (makna, bukan dekorasi — DESIGN.md 3.1) */
+  --ok: #1E7B4F;
+  --ok-subtle: #E8F4EE;
+  --warn: #8A5300;
+  --warn-subtle: #FBF1DE;
+  --danger: #B3261E;
+  --danger-subtle: #FBECEA;
+
+  /* Fokus (DESIGN.md 3.1 & 3.4) */
+  --focus-ring: #0B4F6C;
+
+  /* Radius (DESIGN.md 3.4) */
+  --radius-badge: 4px;
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  --radius-dialog: 12px;
+}
+
+@theme inline {
+  --font-sans: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-ink-on-accent: var(--ink-on-accent);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-press: var(--accent-press);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-line: var(--accent-line);
+
+  --color-ok: var(--ok);
+  --color-ok-subtle: var(--ok-subtle);
+  --color-warn: var(--warn);
+  --color-warn-subtle: var(--warn-subtle);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+
+  --radius-badge: var(--radius-badge);
+  --radius-control: var(--radius-control);
+  --radius-panel: var(--radius-panel);
+  --radius-dialog: var(--radius-dialog);
+}
+
+body {
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

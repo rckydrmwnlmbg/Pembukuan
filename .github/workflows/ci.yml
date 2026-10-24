@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example-synthetic.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: synthetic_anon_key_for_ci_build_only_123456
+      SUPABASE_SERVICE_ROLE_KEY: synthetic_service_role_key_for_ci_build_only_123456
+      FIELD_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      FIELD_HASH_KEY: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+      UPSTASH_REDIS_REST_URL: https://example-synthetic.upstash.io
+      UPSTASH_REDIS_REST_TOKEN: synthetic_upstash_token_123456
+      EXTRACTION_MODE: manual
+      EXTRACTION_DAILY_LIMIT: 200
+      APP_ENV: local
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies (SECURITY S-11)
+        run: npm run audit:deps
+
+      - name: Lint (SECURITY S-05, S-06, S-12)
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Check API route guards (SECURITY S-07)
+        run: npm run check:routes
+
+      - name: Check secrets in source (SECURITY S-04)
+        run: npm run check:secrets
+
+      - name: Run unit tests
+        run: npm run test
+
+      - name: Run extraction tests (mock AI client)
+        run: npm run test:extraction
+
+      - name: Production build
+        run: npm run build
+
+      - name: Re-scan client bundle after build (SECURITY S-04)
+        run: npm run check:secrets

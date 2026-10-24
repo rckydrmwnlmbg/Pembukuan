@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.*
+
+# Next.js build output
+/.next/
+/out/
+/build/
+
+# Testing & coverage
+/coverage/
+/playwright-report/
+/test-results/
+
+# Environment variables & secrets (SECURITY.md S-04: NEVER commit .env*)
+.env
+.env.*
+!.env.example
+
+# Real Excel / PDF data (AGENTS.md Golden Rule #6: NEVER commit real data)
+*.xlsx
+*.xls
+!tests/fixtures/template/*.xlsx
+
+# Logs & OS artifacts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.DS_Store
+Thumbs.db
+*.pem
+*.key
+
+# TypeScript & Vercel
+*.tsbuildinfo
+next-env.d.ts
+.vercel
