@@ -45,8 +45,10 @@ export const envSchema = z.object({
     .min(10)
     .default('dummy_upstash_redis_token_demo_minimum_length'),
   EXTRACTION_MODE: z.enum(['ai', 'manual']).default('ai'),
+  AI_BASE_URL: z.string().url().optional(),
+  AI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
-  LLM_MODEL: z.string().optional(),
+  LLM_MODEL: z.string().optional().default('deepseek-v4.1-flash'),
   EXTRACTION_DAILY_LIMIT: z.coerce.number().int().positive().default(200),
   APP_ENV: z.enum(['local', 'demo', 'production']).default('demo'),
   SENTRY_DSN: z.string().optional(),

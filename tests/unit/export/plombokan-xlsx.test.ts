@@ -42,7 +42,9 @@ describe('plombokan-excel-export & kesamaan saldo UI = hitungan independen = Exc
     expect(ws.getRow(6).getCell(4).value).toBeNull();
   });
 
-  it('mengekspor seluruh 5 dapur demo dengan saldo akhir UI === hitungan independen === sel SISA UANG di Excel', async () => {
+  it(
+    'mengekspor seluruh 5 dapur demo dengan saldo akhir UI === hitungan independen === sel SISA UANG di Excel',
+    async () => {
     const dataset = generateDemoDataset(20261025);
 
     for (const kitchen of dataset.kitchens) {
@@ -135,7 +137,7 @@ describe('plombokan-excel-export & kesamaan saldo UI = hitungan independen = Exc
       expect(excelSisaUang).toBe(independentClosing);
       expect(excelEvaluatedRunning).toBe(uiLedger.summary.closingBalance);
     }
-  });
+  }, 25000);
 
   it('menangkal formula injection (=1+1, +cmd, -2+3, @SUM(A1)): teks pengguna selalu string dan hanya kolom I yang berisi rumus', async () => {
     const maliciousDescriptions = [

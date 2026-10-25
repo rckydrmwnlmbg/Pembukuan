@@ -5,16 +5,20 @@ import { logger } from '@/server/logging/logger';
 
 const ExtractionEnvSchema = z.object({
   EXTRACTION_MODE: z.enum(['ai', 'manual']).default('ai'),
+  AI_BASE_URL: z.string().url().optional(),
+  AI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
-  LLM_MODEL: z.string().optional(),
+  LLM_MODEL: z.string().optional().default('deepseek-v4.1-flash'),
   EXTRACTION_DAILY_LIMIT: z.coerce.number().int().positive().default(200),
 });
 
 export function getExtractionEnv() {
   return ExtractionEnvSchema.parse({
     EXTRACTION_MODE: process.env.EXTRACTION_MODE ?? 'ai',
+    AI_BASE_URL: process.env.AI_BASE_URL,
+    AI_API_KEY: process.env.AI_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-    LLM_MODEL: process.env.LLM_MODEL,
+    LLM_MODEL: process.env.LLM_MODEL ?? 'deepseek-v4.1-flash',
     EXTRACTION_DAILY_LIMIT: process.env.EXTRACTION_DAILY_LIMIT ?? '200',
   });
 }
@@ -121,13 +125,7 @@ type AnthropicContentBlock = { type: string; text?: string };
 
 /**
  * Satu-satunya pintu keluar ke penyedia AI (AGENTS.md #11 & SECURITY.md S-14).
- *
- * Catatan verifikasi dokumentasi resmi Anthropic Messages API (`https://api.anthropic.com/v1/messages`):
- * - Header wajib: `x-api-key`, `anthropic-version: 2023-06-01`, `content-type: application/json` [VERIFIED].
- * - Blok konten PDF: `{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }` [VERIFIED].
- * - Blok konten Gambar: `{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg'|'image/png', data } }` [VERIFIED].
- * - Nama model diambil dari variabel lingkungan `LLM_MODEL` (tidak di-hardcode).
- * - [UNVERIFIED pada akun yayasan]: Status persetujuan Zero Data Retention (ZDR) pada organisasi Anthropic milik yayasan.
+ * Mendukung OpenAI-compatible Vision API maupun Anthropic Messages API.
  */
 export async function aiExtract(
   file: ExtractionFileInput,
@@ -144,11 +142,14 @@ export async function aiExtract(
   }
 
   const started = Date.now();
-  const isLiveEval = process.env.RUN_LIVE_EXTRACTION_EVAL === 'true';
+  const isLive =
+    process.env.RUN_LIVE_EXTRACTION_EVAL === 'true' ||
+    (process.env.NODE_ENV === 'production' &&
+      env.EXTRACTION_MODE === 'ai' &&
+      (Boolean(env.AI_API_KEY) || Boolean(env.ANTHROPIC_API_KEY)));
 
-  // Di CI dan pengujian otomatis (ketika RUN_LIVE_EXTRACTION_EVAL !== 'true'),
-  // gunakan klien AI tiruan agar tidak pernah memanggil jaringan eksternal secara tak sengaja.
-  if (!isLiveEval) {
+  // Di lingkungan non-live / pengujian unit, gunakan klien tiruan
+  if (!isLive) {
     const activeMock: MockAiExtractor =
       customMockExtractor ??
       (() => ({
@@ -222,11 +223,87 @@ export async function aiExtract(
     }
   }
 
-  // Jalur evaluasi langsung (hanya saat RUN_LIVE_EXTRACTION_EVAL=true dijalankan manusia)
-  if (!env.ANTHROPIC_API_KEY || !env.LLM_MODEL) {
-    throw new HttpError(500, 'Konfigurasi ekstraksi belum lengkap');
+  // Panggilan AI sungguhan
+  const apiKey = env.AI_API_KEY || env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new HttpError(500, 'Konfigurasi kunci API AI belum lengkap');
   }
 
+  const model = env.LLM_MODEL || 'deepseek-v4.1-flash';
+  let res: Response;
+
+  // Jalur OpenAI-Compatible Vision (misal: bandelbanget.xyz, OpenAI, dll.)
+  if (env.AI_BASE_URL) {
+    const endpoint = `${env.AI_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
+    const imagePart = {
+      type: 'image_url',
+      image_url: {
+        url: `data:${file.mediaType};base64,${file.base64}`,
+      },
+    };
+
+    try {
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1000,
+          messages: [
+            {
+              role: 'system',
+              content: SYSTEM_PROMPT,
+            },
+            {
+              role: 'user',
+              content: [
+                imagePart,
+                {
+                  type: 'text',
+                  text: 'Ekstrak data bukti transfer ini sesuai skema. Balas HANYA objek JSON tunggal tanpa markdown.',
+                },
+              ],
+            },
+          ],
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      logger.warn({ ms: Date.now() - started }, 'extraction_network_or_timeout');
+      return null;
+    }
+
+    if (!res.ok) {
+      logger.warn(
+        { status: res.status, ms: Date.now() - started },
+        'extraction_request_failed',
+      );
+      return null;
+    }
+
+    try {
+      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const rawText = data.choices?.[0]?.message?.content ?? '';
+      const cleaned = rawText.replace(/```json|```/g, '').trim();
+      const parsed = ExtractionOutput.parse(JSON.parse(cleaned));
+      logger.info(
+        {
+          ms: Date.now() - started,
+          fieldCount: countNonNullFields(parsed),
+        },
+        'extraction_ok',
+      );
+      return parsed;
+    } catch {
+      logger.warn({ ms: Date.now() - started }, 'extraction_invalid_output');
+      return null;
+    }
+  }
+
+  // Jalur Anthropic Messages API
   const fileBlock =
     file.mediaType === 'application/pdf'
       ? {
@@ -246,17 +323,16 @@ export async function aiExtract(
           },
         };
 
-  let res: Response;
   try {
     res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-api-key': env.ANTHROPIC_API_KEY,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: env.LLM_MODEL,
+        model,
         max_tokens: 1000,
         system: SYSTEM_PROMPT,
         messages: [
