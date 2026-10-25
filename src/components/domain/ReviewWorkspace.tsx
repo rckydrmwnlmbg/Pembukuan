@@ -212,7 +212,7 @@ export function ReviewWorkspace({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight text-ink-primary">
-              Review Unggahan — {kitchen.name}
+              Review bukti transfer {kitchen.name}
             </h1>
             <Badge tone="neutral">{kitchen.code}</Badge>
             <Badge tone={kitchen.periodStatus === 'locked' ? 'neutral' : 'accent'}>
@@ -723,7 +723,7 @@ export function ReviewWorkspace({
                   {activeIndex + 1} dari {queue.length}
                 </span>
                 <span className="hidden sm:inline text-ink-muted">
-                  Pintasan: ↑/↓ pindah berkas · Ctrl+Enter simpan dan lanjut
+                  Pintasan: ↑/↓ pindah berkas, Ctrl+Enter simpan dan lanjut
                 </span>
               </div>
 

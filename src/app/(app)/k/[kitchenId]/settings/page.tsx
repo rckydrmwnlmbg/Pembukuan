@@ -346,8 +346,7 @@ export default function KitchenSettingsPage({
               <ArrowLeft className="w-3.5 h-3.5" />
               Kembali ke Buku Kas
             </Link>
-            <span className="text-[var(--line)]">|</span>
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--ink-muted)]">
+            <span className="text-xs font-medium text-[var(--ink-muted)]">
               {settings.name} ({settings.code})
             </span>
           </div>

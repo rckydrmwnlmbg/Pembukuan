@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, AlertCircle, ArrowLeft } from 'lucide-react';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
 
 export default function MfaVerificationPage() {
@@ -101,10 +101,6 @@ export default function MfaVerificationPage() {
 
           <form onSubmit={handleMfaSubmit} className="space-y-5">
             <div>
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--ok-subtle)] text-[var(--ok)] border border-[var(--ok)]/30 mb-2">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Autentikasi Dua Langkah (AAL2)</span>
-              </div>
               <h1 className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
                 Masukkan kode verifikasi
               </h1>
@@ -166,27 +162,27 @@ export default function MfaVerificationPage() {
       {/* Kolom Kanan: Petrol Solid 50% Desktop */}
       <div className="hidden lg:flex flex-col justify-between p-12 lg:p-16 bg-[var(--accent)] text-[var(--ink-on-accent,#fff)]">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold tracking-wider uppercase opacity-80">
-            Standar Keamanan S-01
+          <span className="text-xs font-medium text-white/90">
+            Verifikasi dua langkah
           </span>
           <span className="text-xs bg-white/10 px-2 py-0.5 rounded border border-white/20">
-            AAL2 Required
+            Wajib MFA
           </span>
         </div>
 
         <div className="max-w-md space-y-6">
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold tracking-tight">
-              Verifikasi Berlapis Setiap Sesi
+            <h2 className="text-2xl font-medium tracking-tight">
+              Verifikasi berlapis setiap sesi
             </h2>
             <p className="text-sm opacity-85 leading-relaxed">
               Setiap maker dan admin wajib mengaktifkan autentikasi dua faktor (TOTP). Seluruh transaksi keuangan dilindungi dari kebocoran kata sandi tunggal.
             </p>
           </div>
 
-          <div className="rounded-lg bg-black/20 p-4 border border-white/15 backdrop-blur-none">
-            <div className="text-xs font-mono mb-2 opacity-75">
-              Live Equation Monitor (Data Contoh)
+          <div className="rounded-lg bg-white p-5 text-[var(--ink)] border border-white/20">
+            <div className="text-xs text-[var(--ink-muted)] mb-2 font-medium">
+              Data contoh
             </div>
             <PeriodEquation
               kitchenId="10000000-0000-4000-8000-000000000001"
@@ -205,7 +201,7 @@ export default function MfaVerificationPage() {
         </div>
 
         <div className="text-xs opacity-70">
-          Kasdapur &bull; Perlindungan Integritas Buku Kas &bull; Versi 0.2
+          Kasdapur — Perlindungan integritas buku kas per dapur.
         </div>
       </div>
     </div>

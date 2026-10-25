@@ -389,7 +389,7 @@ export function LedgerWorkspace({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight text-ink-primary">
-              Buku Kas — {kitchen.name}
+              {kitchen.name}
             </h1>
             <Badge tone="neutral">{kitchen.code}</Badge>
             <Badge tone={isLocked ? 'neutral' : 'accent'}>
@@ -397,11 +397,7 @@ export function LedgerWorkspace({
             </Badge>
           </div>
           <p className="mt-1 text-xs text-ink-secondary">
-            PJ: <span className="font-medium text-ink-primary">{kitchen.pjName}</span>
-            {' · '}
-            Rekening: <span className="font-mono">{kitchen.bankName} {kitchen.accountNumberMasked}</span>
-            {' · '}
-            Biaya admin bank bawaan:{' '}
+            Buku kas {kitchen.periodLabel}. Penanggung jawab: <span className="font-medium text-ink-primary">{kitchen.pjName}</span>, Rekening {kitchen.bankName} {kitchen.accountNumberMasked}, Biaya admin bawaan{' '}
             <span className="font-medium tabular-nums">
               {formatRupiah(BigInt(kitchen.adminFeeDefault))}
             </span>
@@ -425,7 +421,7 @@ export function LedgerWorkspace({
           </Button>
           <a
             href={`/api/k/${kitchen.id}/export/xlsx?periodId=${kitchen.periodId}`}
-            className="inline-flex h-9 items-center justify-center rounded-md bg-accent-primary px-3.5 text-sm font-medium text-ink-on-accent transition-colors hover:bg-accent-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            className="inline-flex h-9 items-center justify-center rounded-md border border-line-strong bg-surface px-3.5 text-sm font-medium text-ink-primary transition-colors hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
             Ekspor Excel (.xlsx)
           </a>

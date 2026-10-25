@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
-  ShieldCheck,
   ChevronDown,
   Check,
 } from 'lucide-react';
@@ -47,8 +46,8 @@ export default function HomePage() {
           <span className="text-base font-semibold tracking-tight text-[var(--accent)]">
             Kasdapur
           </span>
-          <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[11px] font-mono bg-[var(--neutral-subtle)] text-[var(--ink-muted)] border border-[var(--line)]">
-            Versi demo · Data contoh
+          <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[11px] bg-[var(--surface-muted)] text-[var(--ink-muted)] border border-[var(--line)]">
+            Versi demo data contoh
           </span>
         </div>
 
@@ -108,12 +107,12 @@ export default function HomePage() {
 
           {/* Kolom Kanan Hero: Komponen Produk Sungguhan berdata sintetis (DESIGN.md §6) */}
           <div className="lg:col-span-5 relative">
-            <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm overflow-hidden max-h-[460px]">
+            <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 overflow-hidden max-h-[460px]">
               <div className="flex items-center justify-between border-b border-[var(--line)] pb-2 mb-3">
                 <span className="text-xs font-semibold text-[var(--ink)]">
                   Dapur Sintetis Cempaka (DS-CMP)
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--neutral-subtle)] text-[var(--ink-muted)]">
+                <span className="px-2 py-0.5 rounded text-[10px] bg-[var(--surface-muted)] text-[var(--ink-muted)] border border-[var(--line)]">
                   Data contoh
                 </span>
               </div>
@@ -134,27 +133,27 @@ export default function HomePage() {
               </div>
 
               {/* Cuplikan Baris Tabel Asli */}
-              <div className="border border-[var(--line)] rounded overflow-hidden text-[11px] font-mono">
-                <div className="bg-[var(--surface-muted)] px-3 py-1.5 font-medium text-[var(--ink-muted)] border-b border-[var(--line)] flex justify-between">
-                  <span>DESKRIPSI</span>
-                  <span>KREDIT</span>
+              <div className="border border-[var(--line)] rounded overflow-hidden text-xs">
+                <div className="bg-[var(--surface-muted)] px-3 py-1.5 font-medium text-[var(--ink-muted)] border-b border-[var(--line)] flex justify-between text-[11px]">
+                  <span>Deskripsi</span>
+                  <span>Kredit</span>
                 </div>
-                <div className="divide-y divide-[var(--line)] bg-[var(--surface)]">
+                <div className="divide-y divide-[var(--line)] bg-[var(--surface)] text-[12px]">
                   <div className="px-3 py-2 flex justify-between">
-                    <span className="truncate pr-2">PERPINDAHAN SALDO FEBRUARI</span>
+                    <span className="truncate pr-2">Perpindahan saldo Februari</span>
                     <span className="text-[var(--ink-muted)]">—</span>
                   </div>
                   <div className="px-3 py-2 flex justify-between">
                     <span className="truncate pr-2">Bahan sayur UD Pangan Segar</span>
-                    <span className="font-semibold">Rp 3.450.000</span>
+                    <span className="font-semibold tabular-nums">Rp 3.450.000</span>
                   </div>
                   <div className="px-3 py-2 flex justify-between">
-                    <span className="truncate pr-2">ADMIN BANK BRI</span>
-                    <span>Rp 6.500</span>
+                    <span className="truncate pr-2">Biaya admin bank BRI</span>
+                    <span className="tabular-nums">Rp 6.500</span>
                   </div>
                   <div className="px-3 py-2 flex justify-between opacity-40">
                     <span className="truncate pr-2">Honorarium relawan minggu ke-3</span>
-                    <span>Rp 7.500.000</span>
+                    <span className="tabular-nums">Rp 7.500.000</span>
                   </div>
                 </div>
               </div>
@@ -261,10 +260,6 @@ export default function HomePage() {
       <section id="keamanan" className="border-t border-[var(--line)] bg-[var(--surface)] py-16 px-4 sm:px-8">
         <div className="max-w-5xl mx-auto space-y-8 text-left">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--ok-subtle)] text-[var(--ok)] border border-[var(--ok)]/30 mb-2">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Standar Keamanan Enterprise</span>
-            </div>
             <h2 className="text-xl font-semibold tracking-tight text-[var(--ink)]">
               Keamanan yang benar-benar diterapkan
             </h2>

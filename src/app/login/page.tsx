@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, ShieldCheck, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, ArrowLeft } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
 
 export default function LoginPage() {
@@ -197,7 +197,7 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="h-10 w-full rounded-md bg-[var(--accent)] text-sm font-semibold text-[var(--ink-on-accent,#fff)] hover:bg-[var(--accent-hover)] active:bg-[var(--accent-press)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] focus:ring-offset-2 disabled:opacity-50"
               >
-                {isLoading ? 'Memeriksa...' : 'Lanjut'}
+                {isLoading ? 'Memeriksa...' : 'Masuk'}
               </button>
 
               <div className="pt-2 text-center text-xs text-[var(--ink-muted)] border-t border-[var(--line)]">
@@ -208,10 +208,6 @@ export default function LoginPage() {
             /* Langkah MFA (DESIGN.md §7) */
             <form onSubmit={handleMfaSubmit} className="space-y-5">
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--ok-subtle)] text-[var(--ok)] border border-[var(--ok)]/30 mb-2">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Autentikasi Dua Langkah (AAL2)</span>
-                </div>
                 <h1 className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
                   Masukkan kode verifikasi
                 </h1>
@@ -272,8 +268,8 @@ export default function LoginPage() {
       {/* Kolom Kanan: Petrol Solid (#0B4F6C) (DESIGN.md §7) */}
       <div className="hidden lg:flex flex-col justify-between p-12 lg:p-16 bg-[#0B4F6C] text-white">
         <div className="flex justify-end">
-          <span className="px-2.5 py-1 rounded text-xs font-mono bg-white/10 text-white border border-white/20">
-            Data contoh · 100% Sintetis
+          <span className="px-2.5 py-1 rounded text-xs bg-white/10 text-white border border-white/20">
+            Data contoh sintetis
           </span>
         </div>
 
@@ -283,7 +279,7 @@ export default function LoginPage() {
           </blockquote>
 
           {/* Strip Persamaan Nyata dari Data Contoh */}
-          <div className="rounded-lg bg-white p-5 text-[var(--ink)] shadow-md">
+          <div className="rounded-lg bg-white p-5 text-[var(--ink)] border border-white/20">
             <PeriodEquation
               kitchenId="10000000-0000-4000-8000-000000000001"
               periodStatus="open"

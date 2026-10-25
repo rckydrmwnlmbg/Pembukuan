@@ -141,7 +141,6 @@ export function ReviewPanel({
           >
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
-          <span className="text-[var(--line)]">|</span>
           <button
             type="button"
             onClick={() => setRotation((r) => (r + 90) % 360)}
@@ -160,13 +159,13 @@ export function ReviewPanel({
             transform: `scale(${zoomLevel / 100}) rotate(${rotation}deg)`,
             transition: 'transform 150ms ease-out',
           }}
-          className="max-w-full max-h-full rounded border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm"
+          className="max-w-full max-h-full rounded border border-[var(--line)] bg-[var(--surface)] p-4"
         >
           {upload.mime === 'application/pdf' ? (
-            <div className="w-[320px] sm:w-[400px] h-[480px] bg-white text-ink flex flex-col justify-between p-6 border text-xs font-mono">
+            <div className="w-[320px] sm:w-[400px] h-[480px] bg-white text-ink flex flex-col justify-between p-6 border text-xs">
               <div className="border-b pb-3">
-                <div className="font-bold text-sm">BUKTI TRANSFER BANK</div>
-                <div className="text-[10px] text-gray-500">DOKUMEN SINTETIS CONTOH</div>
+                <div className="font-semibold text-sm">Bukti transfer bank (sintetis)</div>
+                <div className="text-[10px] text-gray-500">Dokumen contoh</div>
               </div>
               <div className="space-y-3 py-4">
                 <div>Tanggal: {upload.txDate ?? '—'}</div>
@@ -180,10 +179,10 @@ export function ReviewPanel({
               </div>
             </div>
           ) : (
-            <div className="w-[300px] sm:w-[380px] min-h-[440px] bg-white text-ink flex flex-col justify-between p-6 border text-xs font-mono">
+            <div className="w-[300px] sm:w-[380px] min-h-[440px] bg-white text-ink flex flex-col justify-between p-6 border text-xs">
               <div className="border-b pb-3">
-                <div className="font-bold text-sm">BUKTI TRANSFER (GAMBAR)</div>
-                <div className="text-[10px] text-gray-500">SINTETIS DEMO</div>
+                <div className="font-semibold text-sm">Bukti transfer gambar (sintetis)</div>
+                <div className="text-[10px] text-gray-500">Demo sintetis</div>
               </div>
               <div className="space-y-3 py-4">
                 <div>Tanggal: {upload.txDate ?? '—'}</div>
@@ -193,7 +192,7 @@ export function ReviewPanel({
                 <div>Rekening: {upload.recipientAccount ?? '—'}</div>
               </div>
               <div className="text-[9px] text-gray-400 border-t pt-2">
-                EXIF dibersihkan · Normalisasi Sharp aktif
+                EXIF dibersihkan, normalisasi Sharp aktif
               </div>
             </div>
           )}
@@ -342,7 +341,7 @@ export function ReviewPanel({
       </div>
 
       {/* Bilah Aksi Bawah Menempel 64px (DESIGN.md §8.3) */}
-      <div className="h-16 bg-[var(--surface)] border border-[var(--line)] rounded-lg px-4 flex items-center justify-between shrink-0 shadow-sm">
+      <div className="h-16 bg-[var(--surface)] border border-[var(--line)] rounded-lg px-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 text-xs text-[var(--ink-muted)]">
           <span className="font-semibold text-[var(--ink)]">
             {currentIndex} dari {totalCount} berkas

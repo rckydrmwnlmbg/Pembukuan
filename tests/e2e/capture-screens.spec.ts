@@ -11,6 +11,7 @@ const VIEWPORTS = [
 const SCREENS = [
   { name: 'homepage', path: '/' },
   { name: 'login', path: '/login' },
+  { name: 'login-mfa', path: '/login/mfa' },
   { name: 'dashboard', path: '/dashboard' },
   { name: 'ledger', path: '/k/10000000-0000-4000-8000-000000000001/ledger' },
   { name: 'review', path: '/k/10000000-0000-4000-8000-000000000002/review' },
@@ -20,19 +21,30 @@ const SCREENS = [
 ];
 
 test.describe('Penerimaan Visual & Aksesibilitas (Milestone M5 - DESIGN.md §13)', () => {
+  test.beforeEach(async ({ context }) => {
+    await context.addCookies([
+      {
+        name: 'kasdapur_session',
+        value: 'authenticated',
+        domain: '127.0.0.1',
+        path: '/',
+      },
+    ]);
+  });
   for (const screen of SCREENS) {
     for (const vp of VIEWPORTS) {
       test(`Tangkapan layar & visual audit: ${screen.name} @ ${vp.name}px`, async ({
         page,
       }) => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
-        await page.goto(screen.path, { waitUntil: 'networkidle' });
+        await page.goto(screen.path, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(600);
 
         // Simpan tangkapan layar ke docs/screens/<screen>-<width>.png
+        const outDir = process.env.SCREEN_DIR || path.join('docs', 'screens');
         const screenshotPath = path.join(
           process.cwd(),
-          'docs',
-          'screens',
+          outDir,
           `${screen.name}-${vp.name}.png`,
         );
 

@@ -172,7 +172,7 @@ export function PeriodEquation({
                 </>
               ) : (
                 <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400 inline-block" />
+                  <Unlock className="w-3 h-3 text-[var(--ink-subtle)]" />
                   <span>Terbuka</span>
                 </>
               )}
