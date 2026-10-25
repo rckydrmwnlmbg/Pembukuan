@@ -1,5 +1,5 @@
 import 'server-only';
-import { requireUser } from './require-user';
+import { requireUser, type RequireUserOptions } from './require-user';
 import { HttpError } from '@/server/http/errors';
 import type { Role } from '@/types/domain';
 
@@ -10,8 +10,12 @@ export type { Role };
  * pada dapur `kitchenId` (SECURITY.md S-01, S-02, S-03).
  * Mengembalikan 404 (bukan 403) bila ditolak agar tidak membocorkan keberadaan dapur.
  */
-export async function requireKitchenRole(kitchenId: string, allowed: Role[]) {
-  const { supabase, user } = await requireUser();
+export async function requireKitchenRole(
+  kitchenId: string,
+  allowed: Role[],
+  options: RequireUserOptions = { redirectOnFailure: false },
+) {
+  const { supabase, user } = await requireUser(options);
 
   const { data } = await supabase
     .from('kitchen_members')
