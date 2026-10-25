@@ -1,16 +1,18 @@
+import { z } from 'zod';
 import { kitchenRoute } from '@/server/http/kitchen-route';
 import { LockPeriodBodySchema } from '@/lib/schemas/kitchen-settings';
+import { UuidSchema } from '@/lib/schemas/common';
 import { defaultLedgerStore } from '@/server/ledger/service';
-import { HttpError } from '@/server/http/errors';
+
+const ParamsSchema = z.object({
+  periodId: UuidSchema,
+});
 
 export const POST = kitchenRoute(
   ['admin', 'maker'],
   LockPeriodBodySchema,
   async ({ kitchenId, user, params, input }) => {
-    const periodId = params.periodId;
-    if (!periodId) {
-      throw new HttpError(400, 'Parameter periodId wajib disertakan.');
-    }
+    const { periodId } = ParamsSchema.parse(params);
 
     const result = defaultLedgerStore.lockPeriod(
       kitchenId,

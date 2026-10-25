@@ -1,15 +1,18 @@
 import { z } from 'zod';
 import { kitchenRoute } from '@/server/http/kitchen-route';
 import { PostUploadReviewBodySchema } from '@/lib/schemas/upload';
+import { UuidSchema } from '@/lib/schemas/common';
 import { defaultUploadStore } from '@/server/upload/service';
 
-const UploadIdParamSchema = z.string().min(1, 'ID unggahan tidak valid.');
+const ParamsSchema = z.object({
+  uploadId: UuidSchema,
+});
 
 export const POST = kitchenRoute(
   ['admin', 'maker'],
   PostUploadReviewBodySchema,
   async ({ kitchenId, params, user, input }) => {
-    const uploadId = UploadIdParamSchema.parse(params.uploadId);
+    const { uploadId } = ParamsSchema.parse(params);
 
     const result = defaultUploadStore.postReviewedUpload(
       kitchenId,

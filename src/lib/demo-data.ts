@@ -232,7 +232,7 @@ export function generateDemoDataset(seed = 20261025): DemoDataset {
     for (const day of incomingDays) {
       const dateStr = `2026-03-${String(day).padStart(2, '0')}`;
       entries.push({
-        id: `tx-${spec.code}-inc-${seqNo}`,
+        id: `30000000-0000-4000-8000-${String(kIdx + 1).padStart(4, '0')}${String(seqNo).padStart(8, '0')}`,
         kitchenId: spec.id,
         periodId: spec.periodId,
         parentTransactionId: null,
@@ -266,7 +266,7 @@ export function generateDemoDataset(seed = 20261025): DemoDataset {
         Math.floor(rand() * ((cp.maxAmount - cp.minAmount) / 5_000)) * 5_000;
       const amount = BigInt(rawStep);
       const refNo = `202603${String(day).padStart(2, '0')}${String(kIdx + 1)}${String(seqNo).padStart(4, '0')}`;
-      const parentId = `tx-${spec.code}-out-${seqNo}`;
+      const parentId = `30000000-0000-4000-8000-${String(kIdx + 1).padStart(4, '0')}${String(seqNo).padStart(8, '0')}`;
 
       entries.push({
         id: parentId,
@@ -292,7 +292,7 @@ export function generateDemoDataset(seed = 20261025): DemoDataset {
 
       if (cp.bank !== spec.bankCode && entries.length < spec.txCountTarget) {
         entries.push({
-          id: `tx-${spec.code}-adm-${seqNo}`,
+          id: `30000000-0000-4000-8000-${String(kIdx + 1).padStart(4, '0')}${String(seqNo).padStart(8, '0')}`,
           kitchenId: spec.id,
           periodId: spec.periodId,
           parentTransactionId: parentId,
@@ -344,7 +344,7 @@ export function generateDemoDataset(seed = 20261025): DemoDataset {
 
     for (let d = 1; d <= spec.pendingDraftCount; d += 1) {
       uploads.push({
-        id: `upl-${spec.code}-draft-${d}`,
+        id: `40000000-0000-4000-8000-${String(kIdx + 1).padStart(4, '0')}${String(d).padStart(8, '0')}`,
         kitchenId: spec.id,
         periodId: spec.periodId,
         originalName: `bukti-transfer-sintetis-${spec.code.toLowerCase()}-0${d}.jpg`,
@@ -364,7 +364,7 @@ export function generateDemoDataset(seed = 20261025): DemoDataset {
 
     for (let m = 1; m <= spec.needsManualCount; m += 1) {
       uploads.push({
-        id: `upl-${spec.code}-manual-${m}`,
+        id: `40000000-0000-4000-8000-${String(kIdx + 1).padStart(4, '0')}${String(100 + m).padStart(8, '0')}`,
         kitchenId: spec.id,
         periodId: spec.periodId,
         originalName: `bukti-buram-sintetis-${spec.code.toLowerCase()}-0${m}.jpg`,

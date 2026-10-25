@@ -9,6 +9,9 @@ import { defaultLedgerStore } from '@/server/ledger/service';
 import { HttpError } from '@/server/http/errors';
 
 const EmptyGetQuerySchema = z.object({}).strict();
+const ParamsSchema = z.object({
+  txId: UuidSchema,
+});
 
 /**
  * Skema gabungan untuk PATCH `/api/k/[kitchenId]/transactions/[txId]` dengan `.strict()`.
@@ -34,7 +37,7 @@ export const GET = kitchenRoute(
   ['admin', 'maker', 'approver', 'viewer'],
   EmptyGetQuerySchema,
   async ({ kitchenId, params }) => {
-    const txId = UuidSchema.or(z.string().min(1)).parse(params.txId);
+    const { txId } = ParamsSchema.parse(params);
     const ledger = defaultLedgerStore.getKitchenLedger(kitchenId);
     const row = ledger.rows.find((r) => r.id === txId);
     if (!row) {
@@ -55,7 +58,7 @@ export const PATCH = kitchenRoute(
   ['admin', 'maker'],
   PatchTransactionBodySchema,
   async ({ kitchenId, params, user, input }) => {
-    const txId = UuidSchema.or(z.string().min(1)).parse(params.txId);
+    const { txId } = ParamsSchema.parse(params);
 
     if (input.action === 'void') {
       const voidInput = VoidTransactionBodySchema.parse({
@@ -108,7 +111,7 @@ export const PATCH = kitchenRoute(
         debit: result.updated.debit.toString(),
         credit: result.updated.credit.toString(),
         runningBalance: result.updated.runningBalance.toString(),
-        version: result.updated.version ?? 1,
+        version: result.updated.version ?? input.version + 1,
       },
       summary: {
         openingBalance: result.summary.openingBalance.toString(),

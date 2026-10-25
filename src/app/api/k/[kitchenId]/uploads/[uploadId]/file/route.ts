@@ -1,15 +1,18 @@
 import { z } from 'zod';
 import { kitchenRoute } from '@/server/http/kitchen-route';
+import { UuidSchema } from '@/lib/schemas/common';
 import { defaultUploadStore } from '@/server/upload/service';
 
 const EmptyQuerySchema = z.object({}).strict();
-const UploadIdParamSchema = z.string().min(1, 'ID unggahan tidak valid.');
+const ParamsSchema = z.object({
+  uploadId: UuidSchema,
+});
 
 export const GET = kitchenRoute(
   ['admin', 'maker', 'approver', 'viewer'],
   EmptyQuerySchema,
   async ({ kitchenId, params }) => {
-    const uploadId = UploadIdParamSchema.parse(params.uploadId);
+    const { uploadId } = ParamsSchema.parse(params);
     const fileData = await defaultUploadStore.getUploadFileBytes(
       kitchenId,
       uploadId,
