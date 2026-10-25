@@ -4,15 +4,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff, AlertCircle, ArrowLeft } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
-import { setDemoSessionAction } from '@/server/auth/actions';
+import { signInAction, verifyMfaAction } from '@/server/auth/actions';
 
 export default function LoginPage() {
   // Mode: 'credentials' -> 'mfa' -> 'success'
   const [step, setStep] = useState<'credentials' | 'mfa'>('credentials');
 
   // Credentials state
-  const [email, setEmail] = useState('maker@sintetis.example');
-  const [password, setPassword] = useState('demo1234');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export default function LoginPage() {
     }
   }, [step]);
 
-  function handleCredentialsSubmit(e: React.FormEvent) {
+  async function handleCredentialsSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -37,11 +37,26 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-    // Simulasi verifikasi langkah 1 (Kata sandi)
-    setTimeout(() => {
+    try {
+      const result = await signInAction({ email, password });
       setIsLoading(false);
-      setStep('mfa');
-    }, 300);
+
+      if (result.error) {
+        setErrorMsg(result.error);
+        return;
+      }
+
+      if (result.needMfa) {
+        setStep('mfa');
+      } else {
+        window.location.href = '/dashboard';
+      }
+    } catch (err: unknown) {
+      setIsLoading(false);
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Terjadi galat autentikasi.',
+      );
+    }
   }
 
   function handleDigitChange(index: number, value: string) {
@@ -88,16 +103,20 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      await setDemoSessionAction();
-    } catch {
-      // Abaikan galat jaringan, tetap simpan cookie di dokumen
+      const result = await verifyMfaAction(code);
+      if (result.error) {
+        setIsLoading(false);
+        setErrorMsg(result.error);
+        return;
+      }
+
+      window.location.href = '/dashboard';
+    } catch (err: unknown) {
+      setIsLoading(false);
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Terjadi galat verifikasi kode.',
+      );
     }
-
-    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    document.cookie = `kasdapur_session=authenticated; path=/; samesite=lax${isHttps ? '; secure' : ''}; max-age=${60 * 60 * 12}`;
-
-    // Navigasi penuh untuk memastikan Server Component AppShellLayout membaca cookie sesi
-    window.location.href = '/dashboard';
   }
 
   return (
@@ -139,17 +158,27 @@ export default function LoginPage() {
                   Masuk ke Kasdapur
                 </h1>
                 <p className="mt-1 text-xs text-[var(--ink-muted)] leading-relaxed">
-                  Masukkan email dan kata sandi Anda untuk mengakses buku kas dapur.
+                  Gunakan email dan kata sandi akun Supabase Anda, atau akun demo.
                 </p>
               </div>
 
-              {/* Kartu Petunjuk Akun Demo */}
+              {/* Bantuan Kredensial Demo Cepat */}
               <div className="rounded border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--ink-muted)] leading-relaxed">
-                <span className="font-semibold text-[var(--ink)]">Akun Demo Siap Pakai:</span>
-                <div className="mt-1">
-                  Email: <strong className="font-mono text-[var(--ink)]">maker@sintetis.example</strong>
-                  <br />
-                  Sandi: <strong className="font-mono text-[var(--ink)]">demo1234</strong>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-[var(--ink)]">Opsi Akun Demo:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('maker@sintetis.example');
+                      setPassword('demo1234');
+                    }}
+                    className="text-xs font-semibold text-[var(--accent)] hover:underline"
+                  >
+                    Gunakan Demo
+                  </button>
+                </div>
+                <div className="mt-1 text-[11px]">
+                  maker@sintetis.example &bull; demo1234
                 </div>
               </div>
 
@@ -169,7 +198,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-10 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
-                  placeholder="maker@sintetis.example"
+                  placeholder="nama@organisasi.id"
                 />
               </div>
 
@@ -192,6 +221,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-10 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 pr-10 text-sm text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+                    placeholder="••••••••••••"
                   />
                   <button
                     type="button"
@@ -213,7 +243,7 @@ export default function LoginPage() {
               </button>
 
               <div className="pt-2 text-center text-xs text-[var(--ink-muted)] border-t border-[var(--line)]">
-                Akses hanya dengan undangan admin.
+                Akses terotorisasi khusus staf keuangan yayasan.
               </div>
             </form>
           ) : (
@@ -229,19 +259,21 @@ export default function LoginPage() {
               </div>
 
               {/* Petunjuk Mode Demo MFA */}
-              <div className="rounded border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--ink-muted)] leading-relaxed">
-                <span className="font-semibold text-[var(--ink)]">Verifikasi MFA Demo:</span>
-                <p className="mt-1">
-                  Masukkan 6 digit angka apa saja (contoh: <strong className="font-mono text-[var(--ink)]">123456</strong>) untuk menyelesaikan verifikasi AAL2.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setMfaDigits(['1', '2', '3', '4', '5', '6'])}
-                  className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline"
-                >
-                  Isi otomatis 123456
-                </button>
-              </div>
+              {email === 'maker@sintetis.example' && (
+                <div className="rounded border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--ink-muted)] leading-relaxed">
+                  <span className="font-semibold text-[var(--ink)]">Akun Demo Terdeteksi:</span>
+                  <p className="mt-1">
+                    Masukkan 6 digit angka apa saja atau klik tombol di bawah.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setMfaDigits(['1', '2', '3', '4', '5', '6'])}
+                    className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline"
+                  >
+                    Isi otomatis 123456
+                  </button>
+                </div>
+              )}
 
               {/* Enam kotak digit 44x52 (DESIGN.md §7) */}
               <div
@@ -281,7 +313,7 @@ export default function LoginPage() {
                 >
                   Kembali ke formulir login
                 </button>
-                <span className="text-[var(--ink-subtle)]">Mode demo: ketik angka apa saja</span>
+                <span className="text-[var(--ink-subtle)]">Verifikasi TOTP</span>
               </div>
             </form>
           )}
@@ -296,7 +328,7 @@ export default function LoginPage() {
       <div className="hidden lg:flex flex-col justify-between p-12 lg:p-16 bg-[#0B4F6C] text-white">
         <div className="flex justify-end">
           <span className="px-2.5 py-1 rounded text-xs bg-white/10 text-white border border-white/20">
-            Data contoh sintetis
+            Sistem Pembukuan Kas Dapur
           </span>
         </div>
 
@@ -305,7 +337,7 @@ export default function LoginPage() {
             &ldquo;Setiap dapur punya buku dan saldonya sendiri.&rdquo;
           </blockquote>
 
-          {/* Strip Persamaan Nyata dari Data Contoh */}
+          {/* Strip Persamaan Nyata */}
           <div className="rounded-lg bg-white p-5 text-[var(--ink)] border border-white/20">
             <PeriodEquation
               kitchenId="10000000-0000-4000-8000-000000000001"

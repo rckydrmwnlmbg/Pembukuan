@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { requireUser } from '@/server/auth/require-user';
 import { requireKitchenRole } from '@/server/auth/require-kitchen-role';
-import { setDemoSessionAction, clearSessionAction } from '@/server/auth/actions';
+import {
+  setDemoSessionAction,
+  clearSessionAction,
+  signInAction,
+  verifyMfaAction,
+} from '@/server/auth/actions';
 import { HttpError } from '@/server/http/errors';
 
 // Mock cookies dari next/headers
@@ -20,7 +25,7 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-describe('Autentikasi Mode Demo & Penanganan Sesi Vercel', () => {
+describe('Autentikasi Mode Demo & Supabase Auth', () => {
   it('berhasil login dan mendapatkan sesi demo saat cookie kasdapur_session=authenticated', async () => {
     mockCookiesStore.set('kasdapur_session', { value: 'authenticated' });
 
@@ -57,5 +62,28 @@ describe('Autentikasi Mode Demo & Penanganan Sesi Vercel', () => {
 
     await clearSessionAction();
     expect(mockCookiesStore.get('kasdapur_session')).toBeUndefined();
+  });
+
+  it('signInAction mengenali kredensial demo dan mengembalikan needMfa=true', async () => {
+    mockCookiesStore.clear();
+
+    const res = await signInAction({
+      email: 'maker@sintetis.example',
+      password: 'demo1234',
+    });
+
+    expect(res.isDemo).toBe(true);
+    expect(res.needMfa).toBe(true);
+    expect(mockCookiesStore.get('kasdapur_session')?.value).toBe('authenticated');
+  });
+
+  it('verifyMfaAction memverifikasi 6 digit kode pada sesi demo', async () => {
+    mockCookiesStore.set('kasdapur_session', { value: 'authenticated' });
+
+    const resValid = await verifyMfaAction('123456');
+    expect(resValid.success).toBe(true);
+
+    const resInvalid = await verifyMfaAction('123');
+    expect(resInvalid.error).toContain('6 digit');
   });
 });

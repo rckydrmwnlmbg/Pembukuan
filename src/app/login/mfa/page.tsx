@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
-import { setDemoSessionAction } from '@/server/auth/actions';
+import { verifyMfaAction } from '@/server/auth/actions';
 
 export default function MfaVerificationPage() {
   const [mfaDigits, setMfaDigits] = useState(['', '', '', '', '', '']);
@@ -60,16 +60,20 @@ export default function MfaVerificationPage() {
 
     setIsLoading(true);
     try {
-      await setDemoSessionAction();
-    } catch {
-      // Abaikan galat jaringan, tetap simpan cookie di dokumen
+      const result = await verifyMfaAction(code);
+      if (result.error) {
+        setIsLoading(false);
+        setErrorMsg(result.error);
+        return;
+      }
+
+      window.location.href = '/dashboard';
+    } catch (err: unknown) {
+      setIsLoading(false);
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Terjadi galat verifikasi kode.',
+      );
     }
-
-    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    document.cookie = `kasdapur_session=authenticated; path=/; samesite=lax${isHttps ? '; secure' : ''}; max-age=${60 * 60 * 12}`;
-
-    // Navigasi penuh untuk memastikan Server Component AppShellLayout membaca cookie sesi
-    window.location.href = '/dashboard';
   }
 
   return (
@@ -113,21 +117,6 @@ export default function MfaVerificationPage() {
               </p>
             </div>
 
-            {/* Petunjuk Mode Demo MFA */}
-            <div className="rounded border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--ink-muted)] leading-relaxed">
-              <span className="font-semibold text-[var(--ink)]">Verifikasi MFA Demo:</span>
-              <p className="mt-1">
-                Masukkan 6 digit angka apa saja (contoh: <strong className="font-mono text-[var(--ink)]">123456</strong>) untuk menyelesaikan verifikasi AAL2.
-              </p>
-              <button
-                type="button"
-                onClick={() => setMfaDigits(['1', '2', '3', '4', '5', '6'])}
-                className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline"
-              >
-                Isi otomatis 123456
-              </button>
-            </div>
-
             {/* Enam kotak digit 44x52 (DESIGN.md §7) */}
             <div
               className="flex items-center justify-between gap-2"
@@ -167,7 +156,7 @@ export default function MfaVerificationPage() {
                 Kembali ke formulir login
               </Link>
               <span className="text-[var(--ink-muted)]">
-                Batas percobaan aktif
+                Verifikasi Dua Langkah
               </span>
             </div>
           </form>
@@ -200,9 +189,6 @@ export default function MfaVerificationPage() {
           </div>
 
           <div className="rounded-lg bg-white p-5 text-[var(--ink)] border border-white/20">
-            <div className="text-xs text-[var(--ink-muted)] mb-2 font-medium">
-              Data contoh
-            </div>
             <PeriodEquation
               kitchenId="10000000-0000-4000-8000-000000000001"
               periodStatus="open"
