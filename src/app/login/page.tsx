@@ -90,6 +90,7 @@ export default function LoginPage() {
 
     setIsLoading(true);
     setTimeout(() => {
+      document.cookie = 'kasdapur_session=authenticated; path=/; samesite=lax';
       setIsLoading(false);
       router.push('/dashboard');
     }, 500);

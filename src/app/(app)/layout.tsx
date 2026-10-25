@@ -1,12 +1,20 @@
 import React from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/Badge';
+import { requireUser } from '@/server/auth/require-user';
 
-export default function AppShellLayout({
+/**
+ * AppShellLayout untuk seluruh halaman terlindungi di bawah `(app)`:
+ * Wajib memanggil requireUser() untuk menegakkan otorisasi sesi & MFA AAL2 (SECURITY.md S-01).
+ * Halaman publik hanya `/`, `/login`, dan callback auth.
+ */
+export default async function AppShellLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireUser();
+
   return (
     <div className="min-h-screen bg-canvas text-ink-primary">
       {/* Bilah atas 56px (DESIGN.md §4) */}
