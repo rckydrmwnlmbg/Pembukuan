@@ -24,8 +24,11 @@ describe('SECURITY S-01: Layout Server Component Protection (F-002)', () => {
 
   it('AppShellLayout berhasil merender ketika requireUser() berhasil', async () => {
     vi.mocked(requireUser).mockResolvedValueOnce({
-      supabase: {} as any,
-      user: { id: '00000000-0000-4000-8000-000000000001', email: 'maker@sintetis.example' } as any,
+      supabase: {} as unknown as Awaited<ReturnType<typeof requireUser>>['supabase'],
+      user: {
+        id: '00000000-0000-4000-8000-000000000001',
+        email: 'maker@sintetis.example',
+      } as unknown as Awaited<ReturnType<typeof requireUser>>['user'],
     });
 
     const rendered = await AppShellLayout({

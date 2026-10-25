@@ -189,12 +189,16 @@ export default function MfaVerificationPage() {
               Live Equation Monitor (Data Contoh)
             </div>
             <PeriodEquation
-              openingBalance={50_000_000n}
-              incoming={12_500_000n}
-              outgoing={8_200_000n}
-              closingBalance={54_300_000n}
-              isLocked={false}
-              draftCount={0}
+              kitchenId="10000000-0000-4000-8000-000000000001"
+              periodStatus="open"
+              openingBalance={115000000n}
+              totalIncoming={300000000n}
+              totalOutgoing={287450000n}
+              closingBalance={127550000n}
+              incomingCount={2}
+              outgoingCount={120}
+              periodStartDate="1 Mar 2026"
+              lastTxDate="28 Mar 2026"
               variant="compact"
             />
           </div>

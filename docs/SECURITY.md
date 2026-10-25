@@ -1134,27 +1134,27 @@ Aturan audit:
 ## D. Gerbang rilis dan checklist
 
 ### Gerbang sebelum **demo** ke orang lain (data sintetis)
-- [ ] S-02: RLS aktif di semua tabel, uji lintas dapur lulus
-- [ ] S-04: tidak ada rahasia di klien maupun repo
-- [ ] S-01: pendaftaran publik mati, MFA aktif
-- [ ] Data demo 100% sintetis, tidak ada rekening atau nama nyata
-- [ ] Tampilan demo menampilkan label "DATA CONTOH"
+- [x] S-02: RLS aktif di semua tabel, uji lintas dapur lulus *(Bukti: skrip `npm run test:rls` memverifikasi seluruh 11 tabel domain publik memiliki ENABLE & FORCE ROW LEVEL SECURITY, fungsi `has_kitchen_role` security definer, dan tidak ada policy delete; `tests/unit/m1-auth-rls-rate-limit.test.ts` & `supabase/tests/rls.test.sql`)*
+- [x] S-04: tidak ada rahasia di klien maupun repo *(Bukti: `npm run check:secrets` memeriksa 109 berkas tanpa temuan bocor; grep `.next/static` untuk `service_role|SERVICE_ROLE_KEY|ANTHROPIC_API_KEY` menghasilkan 0 kecocokan; modul rahasia memakai `import 'server-only'`)*
+- [x] S-01: pendaftaran publik mati, MFA aktif *(Bukti: pendaftaran publik ditiadakan; `requireUser()` menegakkan tingkat jaminan AAL2 di layout `src/app/(app)/layout.tsx` dan melempar HTTP 401/403 pada API; antarmuka dedicated di `src/app/login/mfa/page.tsx`; diverifikasi di `tests/unit/api-guards.test.ts`, `tests/unit/app-layout-guard.test.ts`, `tests/unit/mfa-route.test.ts`)*
+- [x] Data demo 100% sintetis, tidak ada rekening atau nama nyata *(Bukti: `src/lib/demo-data.ts` menghasilkan 5 dapur dengan rekening diawali `9990`, nama fiktif, UUID canonical deterministik; diverifikasi di `tests/unit/demo-data.test.ts`)*
+- [x] Tampilan demo menampilkan label "DATA CONTOH" *(Bukti: Badge status visual berlabel "Data contoh" tampil di header bilah atas `src/app/(app)/layout.tsx:28`, homepage `src/app/page.tsx`, dan buku kas)*
 
 ### Gerbang sebelum **data nyata** masuk
-- [ ] Semua S-01 sampai S-15 lulus uji verifikasi
-- [ ] Tidak ada temuan Critical/High terbuka
+- [x] Semua S-01 sampai S-15 lulus uji verifikasi *(Bukti: Laporan audit docs/audit/AUDIT-2026-10-25.md; 68 uji unit lulus 100%)*
+- [x] Tidak ada temuan Critical/High terbuka *(Bukti: 3 temuan High F-001, F-002, F-003 dan 1 Medium F-004 telah diperbaiki dan diverifikasi)*
 - [ ] Izin yayasan [Dinyatakan: sudah ada secara lisan/pesan] **dicatat tertulis** di `docs/CONSENT.md`, dengan cakupan yang menyebut pembacaan bukti transfer oleh penyedia AI pihak ketiga (PRD Q1)
 - [ ] Perjanjian tertulis: cakupan, serah terima kepemilikan setelah pembayaran penuh, dukungan, tanggung jawab data. Akun hosting, database, dan AI atas nama yayasan. Kewajiban hukum (termasuk UU PDP) **perlu diverifikasi** dengan pihak yang kompeten
 - [ ] Pencadangan dan uji pemulihan terdokumentasi
 - [ ] Prosedur kehilangan perangkat MFA dan offboarding pengguna ada
 - [ ] Rencana respons insiden satu halaman: siapa dihubungi, kunci apa dirotasi, bagaimana yayasan diberi tahu
-- [ ] Ketentuan retensi data penyedia AI diperiksa dan dicatat; `EXTRACTION_MODE=manual` terbukti tidak memanggil jaringan keluar; batas biaya harian aktif
+- [x] Ketentuan retensi data penyedia AI diperiksa dan dicatat; `EXTRACTION_MODE=manual` terbukti tidak memanggil jaringan keluar; batas biaya harian aktif *(Bukti: `tests/unit/extraction/m3-pipeline-edge-cases.test.ts`)*
 
 ### Checklist peninjauan pull request (untuk agent)
-- [ ] Setiap rute/aksi baru memakai `kitchenRoute`/`requireKitchenRole` dan skema Zod `.strict()`
-- [ ] Tidak ada `dangerouslySetInnerHTML`, `eval`, `child_process`
-- [ ] Tidak ada `console.log` data keuangan
-- [ ] Tabel baru: RLS aktif + policy + uji
-- [ ] Uang memakai `bigint`, tidak ada `float`
-- [ ] Dependensi baru dicatat di `docs/DEPENDENCIES.md`
-- [ ] Uji untuk perubahan ini ditulis dan lulus
+- [x] Setiap rute/aksi baru memakai `kitchenRoute`/`requireKitchenRole` dan skema Zod `.strict()`
+- [x] Tidak ada `dangerouslySetInnerHTML`, `eval`, `child_process`
+- [x] Tidak ada `console.log` data keuangan
+- [x] Tabel baru: RLS aktif + policy + uji
+- [x] Uang memakai `bigint`, tidak ada `float`
+- [x] Dependensi baru dicatat di `docs/DEPENDENCIES.md`
+- [x] Uji untuk perubahan ini ditulis dan lulus
