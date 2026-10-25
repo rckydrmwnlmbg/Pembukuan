@@ -203,7 +203,7 @@ export async function exportPlombokanXlsx(
     'tests/fixtures/template/plombokan-template.xlsx',
   ),
 ): Promise<PlombokanExportResult> {
-  if (!fs.existsSync(templatePath)) {
+  if (!fs.existsSync(/*turbopackIgnore: true*/ templatePath)) {
     await createSanitizedPlombokanTemplate(templatePath);
   }
 
