@@ -2,13 +2,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
+import { setDemoSessionAction } from '@/server/auth/actions';
 
 export default function MfaVerificationPage() {
-  const router = useRouter();
-
   const [mfaDigits, setMfaDigits] = useState(['', '', '', '', '', '']);
   const digitRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +48,7 @@ export default function MfaVerificationPage() {
     digitRefs.current[focusIndex]?.focus();
   }
 
-  function handleMfaSubmit(e: React.FormEvent) {
+  async function handleMfaSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -61,11 +59,17 @@ export default function MfaVerificationPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      document.cookie = 'kasdapur_session=authenticated; path=/; samesite=lax';
-      setIsLoading(false);
-      router.push('/dashboard');
-    }, 500);
+    try {
+      await setDemoSessionAction();
+    } catch {
+      // Abaikan galat jaringan, tetap simpan cookie di dokumen
+    }
+
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    document.cookie = `kasdapur_session=authenticated; path=/; samesite=lax${isHttps ? '; secure' : ''}; max-age=${60 * 60 * 12}`;
+
+    // Navigasi penuh untuk memastikan Server Component AppShellLayout membaca cookie sesi
+    window.location.href = '/dashboard';
   }
 
   return (
@@ -107,6 +111,21 @@ export default function MfaVerificationPage() {
               <p className="mt-1 text-xs text-[var(--ink-muted)] leading-relaxed">
                 Buka aplikasi autentikator Anda dan masukkan kode 6 digit.
               </p>
+            </div>
+
+            {/* Petunjuk Mode Demo MFA */}
+            <div className="rounded border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--ink-muted)] leading-relaxed">
+              <span className="font-semibold text-[var(--ink)]">Verifikasi MFA Demo:</span>
+              <p className="mt-1">
+                Masukkan 6 digit angka apa saja (contoh: <strong className="font-mono text-[var(--ink)]">123456</strong>) untuk menyelesaikan verifikasi AAL2.
+              </p>
+              <button
+                type="button"
+                onClick={() => setMfaDigits(['1', '2', '3', '4', '5', '6'])}
+                className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline"
+              >
+                Isi otomatis 123456
+              </button>
             </div>
 
             {/* Enam kotak digit 44x52 (DESIGN.md §7) */}

@@ -2,13 +2,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, AlertCircle, ArrowLeft } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
+import { setDemoSessionAction } from '@/server/auth/actions';
 
 export default function LoginPage() {
-  const router = useRouter();
-
   // Mode: 'credentials' -> 'mfa' -> 'success'
   const [step, setStep] = useState<'credentials' | 'mfa'>('credentials');
 
@@ -43,7 +41,7 @@ export default function LoginPage() {
     setTimeout(() => {
       setIsLoading(false);
       setStep('mfa');
-    }, 400);
+    }, 300);
   }
 
   function handleDigitChange(index: number, value: string) {
@@ -78,7 +76,7 @@ export default function LoginPage() {
     digitRefs.current[focusIndex]?.focus();
   }
 
-  function handleMfaSubmit(e: React.FormEvent) {
+  async function handleMfaSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -89,11 +87,17 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      document.cookie = 'kasdapur_session=authenticated; path=/; samesite=lax';
-      setIsLoading(false);
-      router.push('/dashboard');
-    }, 500);
+    try {
+      await setDemoSessionAction();
+    } catch {
+      // Abaikan galat jaringan, tetap simpan cookie di dokumen
+    }
+
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    document.cookie = `kasdapur_session=authenticated; path=/; samesite=lax${isHttps ? '; secure' : ''}; max-age=${60 * 60 * 12}`;
+
+    // Navigasi penuh untuk memastikan Server Component AppShellLayout membaca cookie sesi
+    window.location.href = '/dashboard';
   }
 
   return (
@@ -139,6 +143,16 @@ export default function LoginPage() {
                 </p>
               </div>
 
+              {/* Kartu Petunjuk Akun Demo */}
+              <div className="rounded border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--ink-muted)] leading-relaxed">
+                <span className="font-semibold text-[var(--ink)]">Akun Demo Siap Pakai:</span>
+                <div className="mt-1">
+                  Email: <strong className="font-mono text-[var(--ink)]">maker@sintetis.example</strong>
+                  <br />
+                  Sandi: <strong className="font-mono text-[var(--ink)]">demo1234</strong>
+                </div>
+              </div>
+
               {/* Email */}
               <div className="space-y-1.5">
                 <label
@@ -150,48 +164,46 @@ export default function LoginPage() {
                 <input
                   id="email-input"
                   type="email"
+                  autoComplete="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-10 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+                  placeholder="maker@sintetis.example"
                 />
               </div>
 
-              {/* Password */}
+              {/* Kata Sandi */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label
                     htmlFor="password-input"
                     className="text-[13px] font-medium text-[var(--ink)]"
                   >
-                    Kata sandi
+                    Kata Sandi
                   </label>
                 </div>
-                <div className="relative flex items-center">
+                <div className="relative">
                   <input
                     id="password-input"
                     type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-10 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface)] pl-3 pr-10 text-sm text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+                    className="h-10 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 pr-10 text-sm text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 text-[var(--ink-muted)] hover:text-[var(--ink)]"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-muted)] hover:text-[var(--ink)]"
                     aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
                   >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              {/* Tombol Masuk */}
               <button
                 type="submit"
                 disabled={isLoading}
@@ -214,6 +226,21 @@ export default function LoginPage() {
                 <p className="mt-1 text-xs text-[var(--ink-muted)] leading-relaxed">
                   Buka aplikasi autentikator Anda dan masukkan kode 6 digit.
                 </p>
+              </div>
+
+              {/* Petunjuk Mode Demo MFA */}
+              <div className="rounded border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--ink-muted)] leading-relaxed">
+                <span className="font-semibold text-[var(--ink)]">Verifikasi MFA Demo:</span>
+                <p className="mt-1">
+                  Masukkan 6 digit angka apa saja (contoh: <strong className="font-mono text-[var(--ink)]">123456</strong>) untuk menyelesaikan verifikasi AAL2.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setMfaDigits(['1', '2', '3', '4', '5', '6'])}
+                  className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline"
+                >
+                  Isi otomatis 123456
+                </button>
               </div>
 
               {/* Enam kotak digit 44x52 (DESIGN.md §7) */}

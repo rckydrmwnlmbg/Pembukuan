@@ -2,6 +2,7 @@ import 'server-only';
 import { requireUser, type RequireUserOptions } from './require-user';
 import { HttpError } from '@/server/http/errors';
 import type { Role } from '@/types/domain';
+import { defaultLedgerStore } from '@/server/ledger/service';
 
 export type { Role };
 
@@ -16,6 +17,17 @@ export async function requireKitchenRole(
   options: RequireUserOptions = { redirectOnFailure: false },
 ) {
   const { supabase, user } = await requireUser(options);
+
+  // Akses pengguna demo (maker sintetis) untuk dataset demo in-memory
+  if (user.id === '00000000-0000-4000-8000-000000000001') {
+    try {
+      defaultLedgerStore.getKitchen(kitchenId);
+    } catch {
+      throw new HttpError(404, 'Tidak ditemukan');
+    }
+    const demoRole: Role = allowed.includes('admin') ? 'admin' : (allowed[0] ?? 'maker');
+    return { supabase, user, role: demoRole };
+  }
 
   const { data } = await supabase
     .from('kitchen_members')

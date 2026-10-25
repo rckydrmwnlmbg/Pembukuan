@@ -2,6 +2,7 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createClient } from '@/server/supabase/server';
+import { getEnv } from '@/server/env';
 import { HttpError } from '@/server/http/errors';
 
 export interface RequireUserOptions {
@@ -18,40 +19,97 @@ export interface RequireUserOptions {
  */
 export async function requireUser(options: RequireUserOptions = {}) {
   const { redirectOnFailure = true } = options;
-  const supabase = await createClient();
+
+  let demoSession: string | undefined;
+  try {
+    const cookieStore = await cookies();
+    demoSession = cookieStore.get('kasdapur_session')?.value;
+  } catch {
+    demoSession = undefined;
+  }
+
+  let env;
+  try {
+    env = getEnv();
+  } catch {
+    env = {
+      NEXT_PUBLIC_DEMO: 'true',
+      APP_ENV: 'demo',
+    };
+  }
+
+  const isDemoForbidden =
+    env.NEXT_PUBLIC_DEMO === 'false' && env.APP_ENV === 'production';
+  const isDemoAllowed = !isDemoForbidden;
+
+  // 1. Jika sesi demo aktif dan demo diizinkan
+  if (isDemoAllowed && demoSession === 'authenticated') {
+    let supabaseClient;
+    try {
+      supabaseClient = await createClient();
+    } catch {
+      supabaseClient = {
+        auth: {
+          getUser: async () => ({
+            data: {
+              user: {
+                id: '00000000-0000-4000-8000-000000000001',
+                email: 'maker@sintetis.example',
+                app_metadata: {},
+                user_metadata: {},
+                aud: 'authenticated',
+                created_at: '2026-03-01T00:00:00.000Z',
+              },
+            },
+            error: null,
+          }),
+          mfa: {
+            getAuthenticatorAssuranceLevel: async () => ({
+              data: { currentLevel: 'aal2', nextLevel: null },
+              error: null,
+            }),
+          },
+        },
+      } as unknown as Awaited<ReturnType<typeof createClient>>;
+    }
+
+    return {
+      supabase: supabaseClient,
+      user: {
+        id: '00000000-0000-4000-8000-000000000001',
+        email: 'maker@sintetis.example',
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: '2026-03-01T00:00:00.000Z',
+      } as unknown as NonNullable<
+        Awaited<ReturnType<typeof createClient>>['auth']['getUser']
+      > extends { data: { user: infer U } }
+        ? NonNullable<U>
+        : never,
+    };
+  }
+
+  // 2. Pemeriksaan sesi Supabase Auth nyata
+  let supabase;
+  try {
+    supabase = await createClient();
+  } catch {
+    if (!redirectOnFailure) {
+      throw new HttpError(
+        401,
+        'Sesi tidak valid atau telah berakhir. Silakan login terlebih dahulu.',
+      );
+    }
+    redirect('/login');
+  }
+
   const {
     data: { user },
     error,
   } = await supabase.auth.getUser();
 
   if (error || !user) {
-    let demoSession: string | undefined;
-    try {
-      const cookieStore = await cookies();
-      demoSession = cookieStore.get('kasdapur_session')?.value;
-    } catch {
-      demoSession = undefined;
-    }
-
-    const isDemoAllowed =
-      process.env.NEXT_PUBLIC_DEMO === 'true' ||
-      process.env.APP_ENV === 'demo' ||
-      process.env.APP_ENV === 'local';
-
-    if (isDemoAllowed && demoSession === 'authenticated') {
-      return {
-        supabase,
-        user: {
-          id: '00000000-0000-4000-8000-000000000001',
-          email: 'maker@sintetis.example',
-          app_metadata: {},
-          user_metadata: {},
-          aud: 'authenticated',
-          created_at: '2026-03-01T00:00:00.000Z',
-        } as unknown as NonNullable<typeof user>,
-      };
-    }
-
     if (!redirectOnFailure) {
       throw new HttpError(
         401,

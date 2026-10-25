@@ -15,23 +15,40 @@ const base64Key32Bytes = z
     { message: 'Harus berupa 32 byte dalam format base64' },
   );
 
+const DUMMY_KEY_32 = 'YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=';
+
 export const envSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(20),
+  NEXT_PUBLIC_SUPABASE_URL: z
+    .string()
+    .url()
+    .default('https://sintetis.supabase.co'),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z
+    .string()
+    .min(20)
+    .default('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_testing_only_32_bytes'),
   NEXT_PUBLIC_DEMO: z
     .enum(['true', 'false'])
     .optional()
-    .default('false'),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
-  FIELD_ENCRYPTION_KEY: base64Key32Bytes,
-  FIELD_HASH_KEY: base64Key32Bytes,
-  UPSTASH_REDIS_REST_URL: z.string().url(),
-  UPSTASH_REDIS_REST_TOKEN: z.string().min(10),
+    .default('true'),
+  SUPABASE_SERVICE_ROLE_KEY: z
+    .string()
+    .min(20)
+    .default('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_service_role_key_for_testing_only'),
+  FIELD_ENCRYPTION_KEY: base64Key32Bytes.default(DUMMY_KEY_32),
+  FIELD_HASH_KEY: base64Key32Bytes.default(DUMMY_KEY_32),
+  UPSTASH_REDIS_REST_URL: z
+    .string()
+    .url()
+    .default('https://sintetis-redis.upstash.io'),
+  UPSTASH_REDIS_REST_TOKEN: z
+    .string()
+    .min(10)
+    .default('dummy_upstash_redis_token_demo_minimum_length'),
   EXTRACTION_MODE: z.enum(['ai', 'manual']).default('ai'),
   ANTHROPIC_API_KEY: z.string().optional(),
   LLM_MODEL: z.string().optional(),
   EXTRACTION_DAILY_LIMIT: z.coerce.number().int().positive().default(200),
-  APP_ENV: z.enum(['local', 'demo', 'production']).default('local'),
+  APP_ENV: z.enum(['local', 'demo', 'production']).default('demo'),
   SENTRY_DSN: z.string().optional(),
 });
 

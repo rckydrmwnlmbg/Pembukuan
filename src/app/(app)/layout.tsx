@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/Badge';
 import { requireUser } from '@/server/auth/require-user';
+import { LogoutButton } from '@/components/domain/LogoutButton';
 
 /**
  * AppShellLayout untuk seluruh halaman terlindungi di bawah `(app)`:
@@ -37,6 +38,7 @@ export default async function AppShellLayout({
               Data contoh
             </Badge>
             <Badge tone="accent">MFA AAL2 Aktif</Badge>
+            <LogoutButton />
           </div>
         </div>
       </header>
