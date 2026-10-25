@@ -92,6 +92,7 @@ describe('Milestone M4: Kunci Periode, Saldo Awal Otomatis, Pengaturan Dapur, & 
         referenceNo: '20260325LOCKED01',
         description: 'Belanja sayur darurat',
         amount: 250_000n,
+        includeAdminFee: false,
       }),
     ).toThrowError(HttpError);
 

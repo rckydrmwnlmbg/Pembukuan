@@ -169,6 +169,7 @@ export function UploadDropzone({
             ref={fileInputRef}
             type="file"
             multiple
+            aria-label={`Pilih berkas bukti transfer untuk ${kitchenName}`}
             accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
             className="sr-only"
             onChange={(e) => {

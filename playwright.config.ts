@@ -1,15 +1,17 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const PORT = 3005;
+
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  retries: 0,
+  workers: 1,
   reporter: 'list',
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
-    trace: 'on-first-retry',
+    baseURL: `http://127.0.0.1:${PORT}`,
+    trace: 'off',
   },
   projects: [
     {
@@ -17,4 +19,10 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
+  webServer: {
+    command: `npx next start -p ${PORT}`,
+    url: `http://127.0.0.1:${PORT}`,
+    reuseExistingServer: false,
+    timeout: 60_000,
+  },
 });
