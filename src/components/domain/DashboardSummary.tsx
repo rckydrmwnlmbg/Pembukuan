@@ -213,7 +213,7 @@ export function DashboardSummary({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full min-w-[700px] text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-[var(--line)] text-[var(--ink-muted)] bg-[var(--surface)] font-medium">
                   <th className="py-2.5 px-4">Dapur</th>

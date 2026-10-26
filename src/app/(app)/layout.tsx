@@ -51,7 +51,7 @@ export default async function AppShellLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
       {/* Sidebar Navigasi Tetap di Kiri (Linear / Stripe Style) */}
       <Sidebar
         kitchens={serializedKitchens}
@@ -59,11 +59,11 @@ export default async function AppShellLayout({
       />
 
       {/* Area Konten Utama */}
-      <div className="flex flex-1 flex-col min-w-0 overflow-y-auto">
+      <main className="flex flex-1 flex-col min-w-0 overflow-y-auto">
         <div className="w-full max-w-[1440px] mx-auto p-4 sm:p-6 lg:p-8">
           {children}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

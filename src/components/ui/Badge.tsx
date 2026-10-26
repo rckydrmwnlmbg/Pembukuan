@@ -61,7 +61,7 @@ const TONE_CONFIG: Record<
   },
   locked: {
     classes:
-      'bg-[var(--neutral-subtle)] text-[var(--ink)] border border-[var(--line)]',
+      'bg-[var(--surface-muted)] text-[var(--ink)] border border-[var(--line)]',
     DefaultIcon: Lock,
   },
   accent: {

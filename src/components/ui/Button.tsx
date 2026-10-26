@@ -22,11 +22,11 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
     'bg-[var(--accent)] text-[var(--ink-on-accent,#fff)] border border-transparent hover:bg-[var(--accent-hover)] active:bg-[var(--accent-press)] shadow-none',
   secondary:
-    'bg-[var(--surface)] text-[var(--ink)] border border-[var(--line-strong)] hover:bg-[var(--surface-muted)] active:bg-[var(--neutral-subtle)] shadow-none',
+    'bg-[var(--surface)] text-[var(--ink)] border border-[var(--line-strong)] hover:bg-[var(--surface-muted)] active:bg-[var(--surface-subtle)] shadow-none',
   ghost:
-    'bg-transparent text-[var(--ink-muted)] border border-transparent hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] active:bg-[var(--neutral-subtle)] shadow-none',
+    'bg-transparent text-[var(--ink-muted)] border border-transparent hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] active:bg-[var(--surface-subtle)] shadow-none',
   tertiary:
-    'bg-transparent text-[var(--ink-muted)] border border-transparent hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] active:bg-[var(--neutral-subtle)] shadow-none',
+    'bg-transparent text-[var(--ink-muted)] border border-transparent hover:bg-[var(--surface-muted)] hover:text-[var(--ink)] active:bg-[var(--surface-subtle)] shadow-none',
   danger:
     'bg-[var(--surface)] text-[var(--danger)] border border-[var(--danger)] hover:bg-[var(--danger-subtle)] active:opacity-90 shadow-none',
 };

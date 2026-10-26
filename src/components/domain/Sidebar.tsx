@@ -102,7 +102,7 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
   return (
     <>
       {/* Mobile Bar (<= 1024px) */}
-      <div className="lg:hidden sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-4">
+      <div className="lg:hidden sticky top-0 z-40 flex h-14 w-full shrink-0 items-center justify-between border-b border-[var(--line)] bg-[var(--surface)] px-4">
         <div className="flex items-center gap-2.5">
           <button
             type="button"
@@ -136,7 +136,7 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
 
       {/* Sidebar Panel (Linear / Stripe Style: 256px Fixed) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-[var(--line)] bg-[var(--surface)] transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-[var(--line)] bg-[var(--surface)] transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

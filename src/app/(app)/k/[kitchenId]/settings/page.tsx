@@ -334,39 +334,38 @@ export default function KitchenSettingsPage({
   const totalDrafts = settings.pendingDraftCount + settings.needsManualCount;
 
   return (
-    <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink-base)] p-4 sm:p-8">
-      <div className="mx-auto max-w-4xl space-y-6">
-        {/* Navigasi atas */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link
-              href={`/k/${kitchenId}/ledger`}
-              className="inline-flex items-center gap-1.5 text-xs text-[var(--ink-muted)] hover:text-[var(--ink-base)] font-medium"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Kembali ke Buku Kas
-            </Link>
-            <span className="text-xs font-medium text-[var(--ink-muted)]">
-              {settings.name} ({settings.code})
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/k/${kitchenId}/audit`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] text-xs font-medium text-[var(--ink-base)] hover:bg-[var(--neutral-subtle)] transition-colors"
-            >
-              <History className="w-3.5 h-3.5" />
-              Riwayat Perubahan
-            </Link>
-            <Link
-              href={`/k/${kitchenId}/ledger`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--accent)] text-xs font-medium text-[var(--ink-on-accent,#fff)] hover:opacity-90 transition-opacity"
-            >
-              Buku Kas
-            </Link>
-          </div>
+    <div className="space-y-6">
+      {/* Navigasi atas */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/k/${kitchenId}/ledger`}
+            className="inline-flex items-center gap-1.5 text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] font-medium"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Kembali ke Buku Kas
+          </Link>
+          <span className="text-xs font-medium text-[var(--ink-muted)]">
+            {settings.name} ({settings.code})
+          </span>
         </div>
+
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/k/${kitchenId}/audit`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors"
+          >
+            <History className="w-3.5 h-3.5" />
+            Riwayat Perubahan
+          </Link>
+          <Link
+            href={`/k/${kitchenId}/ledger`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--accent)] text-xs font-medium text-[var(--ink-on-accent,#fff)] hover:opacity-90 transition-opacity"
+          >
+            Buku Kas
+          </Link>
+        </div>
+      </div>
 
         {/* Notifikasi feedback */}
         {errorMsg && (
@@ -726,7 +725,7 @@ export default function KitchenSettingsPage({
                 <button
                   type="button"
                   onClick={() => setShowUnlockModal(false)}
-                  className="px-3 py-1.5 rounded-md border border-[var(--line)] text-xs text-[var(--ink-muted)] hover:bg-[var(--neutral-subtle)]"
+                  className="px-3 py-1.5 rounded-md border border-[var(--line)] text-xs text-[var(--ink-muted)] hover:bg-[var(--surface-muted)]"
                 >
                   Batal
                 </button>
@@ -742,7 +741,6 @@ export default function KitchenSettingsPage({
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }

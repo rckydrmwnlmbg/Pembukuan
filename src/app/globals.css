@@ -87,7 +87,7 @@ body {
   color: var(--ink);
   font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
-  line-height: 22px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 

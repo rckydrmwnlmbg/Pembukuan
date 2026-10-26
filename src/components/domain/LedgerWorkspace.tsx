@@ -539,108 +539,121 @@ export function LedgerWorkspace({
       </form>
 
       {/* Tabel Buku Kas 11 Kolom Format Plombokan (DESIGN.md §5.3) */}
-      <div className="overflow-hidden rounded-lg border border-line-strong bg-surface">
+      <div className="overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface)] shadow-2xs">
         <div className="max-h-[640px] overflow-auto">
-          <table className="w-full border-collapse text-left text-sm">
-            <thead className="sticky top-0 z-20 border-b border-line-strong bg-surface-subtle text-xs font-semibold text-ink-secondary">
+          <table className="w-full min-w-[1360px] border-collapse text-left text-sm table-fixed">
+            <colgroup>
+              <col className="w-[52px]" />
+              <col className="w-[112px]" />
+              <col className="w-[170px]" />
+              <col className="w-[300px]" />
+              <col className="w-[200px]" />
+              <col className="w-[90px]" />
+              <col className="w-[130px]" />
+              <col className="w-[130px]" />
+              <col className="w-[140px]" />
+              <col className="w-[140px]" />
+              <col className="w-[120px]" />
+            </colgroup>
+            <thead className="sticky top-0 z-20 border-b border-[var(--line-strong)] bg-[var(--surface-muted)] text-xs font-semibold text-[var(--ink-secondary)]">
               <tr>
                 <th
                   scope="col"
-                  className="sticky left-0 z-30 w-12 border-r border-line-subtle bg-surface-subtle px-2.5 py-2.5 text-right tabular-nums"
+                  className="sticky left-0 top-0 z-30 w-[52px] min-w-[52px] max-w-[52px] border-r border-[var(--line-subtle)] bg-[var(--surface-muted)] px-2.5 py-2.5 text-right tabular-nums shadow-[1px_0_0_0_var(--line)]"
                 >
                   NO
                 </th>
                 <th
                   scope="col"
-                  className="sticky left-12 z-30 w-28 border-r border-line-subtle bg-surface-subtle px-2.5 py-2.5"
+                  className="sticky left-[52px] top-0 z-30 w-[112px] min-w-[112px] max-w-[112px] border-r border-[var(--line-subtle)] bg-[var(--surface-muted)] px-2.5 py-2.5 shadow-[1px_0_0_0_var(--line)]"
                 >
                   TANGGAL
                 </th>
                 <th
                   scope="col"
-                  className="w-40 border-r border-line-subtle px-2.5 py-2.5"
+                  className="w-[170px] border-r border-[var(--line-subtle)] px-2.5 py-2.5"
                 >
                   NO. REFERENCE
                 </th>
                 <th
                   scope="col"
-                  className="min-w-[280px] border-r border-line-subtle px-3 py-2.5"
+                  className="w-[300px] border-r border-[var(--line-subtle)] px-3 py-2.5"
                 >
                   DESKRIPSI
                 </th>
                 <th
                   scope="col"
-                  className="w-56 border-r border-line-subtle px-2.5 py-2.5"
+                  className="w-[200px] border-r border-[var(--line-subtle)] px-2.5 py-2.5"
                 >
                   REKENING PENERIMA
                 </th>
                 <th
                   scope="col"
-                  className="w-24 border-r border-line-subtle px-2.5 py-2.5"
+                  className="w-[90px] border-r border-[var(--line-subtle)] px-2.5 py-2.5"
                 >
                   BANK
                 </th>
                 <th
                   scope="col"
-                  className="w-36 border-r border-line-subtle px-2.5 py-2.5 text-right"
+                  className="w-[130px] border-r border-[var(--line-subtle)] px-2.5 py-2.5 text-right"
                 >
                   DEBIT
                 </th>
                 <th
                   scope="col"
-                  className="w-36 border-r border-line-subtle px-2.5 py-2.5 text-right"
+                  className="w-[130px] border-r border-[var(--line-subtle)] px-2.5 py-2.5 text-right"
                 >
                   KREDIT
                 </th>
                 <th
                   scope="col"
-                  className="w-40 border-r border-line-subtle px-2.5 py-2.5 text-right"
+                  className="w-[140px] border-r border-[var(--line-subtle)] px-2.5 py-2.5 text-right"
                 >
                   TOTAL
                 </th>
                 <th
                   scope="col"
-                  className="w-36 border-r border-line-subtle px-2.5 py-2.5"
+                  className="w-[140px] border-r border-[var(--line-subtle)] px-2.5 py-2.5"
                 >
                   KET
                 </th>
-                <th scope="col" className="w-32 px-2.5 py-2.5">
+                <th scope="col" className="w-[120px] px-2.5 py-2.5">
                   DOKUMENTASI NOTA
                 </th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-line-subtle">
+            <tbody className="divide-y divide-[var(--line-subtle)]">
               {/* Baris 1 (NO = 1): PERPINDAHAN SALDO BULAN SEBELUMNYA (OI-04) */}
-              <tr className="bg-surface-subtle/60 font-medium text-ink-primary">
-                <td className="sticky left-0 z-10 border-r border-line-subtle bg-surface-subtle px-2.5 py-2 text-right tabular-nums">
+              <tr className="bg-[var(--surface-subtle)] font-medium text-[var(--ink-primary)]">
+                <td className="sticky left-0 z-10 w-[52px] min-w-[52px] max-w-[52px] border-r border-[var(--line-subtle)] bg-[var(--surface-subtle)] px-2.5 py-2 text-right tabular-nums shadow-[1px_0_0_0_var(--line)]">
                   1
                 </td>
-                <td className="sticky left-12 z-10 border-r border-line-subtle bg-surface-subtle px-2.5 py-2 tabular-nums">
+                <td className="sticky left-[52px] z-10 w-[112px] min-w-[112px] max-w-[112px] border-r border-[var(--line-subtle)] bg-[var(--surface-subtle)] px-2.5 py-2 tabular-nums shadow-[1px_0_0_0_var(--line)] whitespace-nowrap">
                   {formatTxDate(openingDateIso)}
                 </td>
-                <td className="border-r border-line-subtle px-2.5 py-2 font-mono text-xs text-ink-muted">
+                <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 font-mono text-xs text-[var(--ink-muted)]">
                   —
                 </td>
                 <td
                   colSpan={3}
-                  className="border-r border-line-subtle px-3 py-2 text-center font-semibold tracking-tight text-ink-primary"
+                  className="border-r border-[var(--line-subtle)] px-3 py-2 text-center font-semibold tracking-tight text-[var(--ink-primary)] truncate"
                 >
                   {getOpeningRowDescription(kitchen.year, kitchen.month)}
                 </td>
-                <td className="border-r border-line-subtle px-2.5 py-2 text-right tabular-nums text-debit">
+                <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-right tabular-nums text-[var(--ok)] whitespace-nowrap">
                   {formatLedgerCellAmount(openingBalanceBig)}
                 </td>
-                <td className="border-r border-line-subtle px-2.5 py-2 text-right tabular-nums text-credit">
+                <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-right tabular-nums text-[var(--ink)] whitespace-nowrap">
                   {formatLedgerCellAmount(0n)}
                 </td>
-                <td className="border-r border-line-subtle px-2.5 py-2 text-right font-semibold tabular-nums text-ink-primary">
+                <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-right font-semibold tabular-nums text-[var(--ink-primary)] whitespace-nowrap">
                   {formatRupiah(openingBalanceBig)}
                 </td>
-                <td className="border-r border-line-subtle px-2.5 py-2 text-xs text-ink-secondary">
+                <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-xs text-[var(--ink-secondary)] truncate">
                   Saldo awal periode
                 </td>
-                <td className="px-2.5 py-2 text-xs text-ink-muted" />
+                <td className="px-2.5 py-2 text-xs text-[var(--ink-muted)]" />
               </tr>
 
               {/* Baris 2..N: Transaksi Buku Kas */}
@@ -655,18 +668,18 @@ export function LedgerWorkspace({
                   <tr
                     key={row.id}
                     onClick={() => openInspectPanel(row)}
-                    className={`group cursor-pointer transition-colors hover:bg-accent-subtle/50 ${
-                      isVoid ? 'bg-surface-subtle/50 text-ink-muted' : 'bg-surface'
+                    className={`group cursor-pointer transition-colors hover:bg-[var(--surface-muted)] ${
+                      isVoid ? 'bg-[var(--surface-subtle)]/50 text-[var(--ink-muted)]' : 'bg-[var(--surface)]'
                     }`}
                   >
-                    <td className="sticky left-0 z-10 border-r border-line-subtle bg-surface px-2.5 py-2 text-right tabular-nums group-hover:bg-accent-subtle/50">
+                    <td className="sticky left-0 z-10 w-[52px] min-w-[52px] max-w-[52px] border-r border-[var(--line-subtle)] bg-[var(--surface)] px-2.5 py-2 text-right tabular-nums group-hover:bg-[var(--surface-muted)] shadow-[1px_0_0_0_var(--line)]">
                       {isVoid ? '—' : row.rowNo + 1}
                     </td>
-                    <td className="sticky left-12 z-10 border-r border-line-subtle bg-surface px-2.5 py-2 tabular-nums group-hover:bg-accent-subtle/50">
+                    <td className="sticky left-[52px] z-10 w-[112px] min-w-[112px] max-w-[112px] border-r border-[var(--line-subtle)] bg-[var(--surface)] px-2.5 py-2 tabular-nums group-hover:bg-[var(--surface-muted)] shadow-[1px_0_0_0_var(--line)] whitespace-nowrap">
                       {formatTxDate(row.txDate)}
                     </td>
                     <td
-                      className="border-r border-line-subtle px-2.5 py-2 font-mono text-xs"
+                      className="border-r border-[var(--line-subtle)] px-2.5 py-2 font-mono text-xs overflow-hidden"
                       onClick={(e) => {
                         if (row.referenceNo) {
                           e.stopPropagation();
@@ -675,98 +688,98 @@ export function LedgerWorkspace({
                       }}
                     >
                       {row.referenceNo ? (
-                        <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center justify-between gap-1 overflow-hidden">
                           <span
-                            className={isVoid ? 'line-through' : ''}
+                            className={`truncate ${isVoid ? 'line-through' : ''}`}
                             title={row.referenceNo}
                           >
                             {row.referenceNo}
                           </span>
-                          <span className="invisible text-[11px] text-accent-primary group-hover:visible">
+                          <span className="invisible text-[11px] text-[var(--accent)] group-hover:visible shrink-0">
                             {copiedRefId === row.id ? 'Disalin' : 'Salin'}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-ink-muted">—</span>
+                        <span className="text-[var(--ink-muted)]">—</span>
                       )}
                     </td>
                     <td
-                      className="border-r border-line-subtle px-3 py-2"
+                      className="border-r border-[var(--line-subtle)] px-3 py-2 overflow-hidden"
                       title={row.description}
                     >
-                      <div className="flex flex-col gap-0.5">
+                      <div className="flex flex-col gap-0.5 overflow-hidden">
                         <span
-                          className={`line-clamp-2 ${
-                            isVoid ? 'line-through text-ink-muted' : 'text-ink-primary'
+                          className={`truncate ${
+                            isVoid ? 'line-through text-[var(--ink-muted)]' : 'text-[var(--ink-primary)]'
                           }`}
                         >
                           {row.description}
                         </span>
                         {row.kind === 'admin_fee' ? (
-                          <span className="text-[11px] text-ink-secondary">
+                          <span className="text-[11px] text-[var(--ink-secondary)] truncate">
                             Biaya admin berpasangan (Ref: {row.referenceNo ?? '—'})
                           </span>
                         ) : null}
                       </div>
                     </td>
                     <td
-                      className="border-r border-line-subtle px-2.5 py-2 text-xs"
+                      className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-xs overflow-hidden"
                       title={recipientText}
                     >
-                      <span className={isVoid ? 'line-through' : ''}>
+                      <span className={`truncate block ${isVoid ? 'line-through' : ''}`}>
                         {recipientText}
                       </span>
                     </td>
-                    <td className="border-r border-line-subtle px-2.5 py-2 text-xs">
+                    <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-xs truncate">
                       {row.counterpartyBank ?? ''}
                     </td>
                     <td
-                      className={`border-r border-line-subtle px-2.5 py-2 text-right tabular-nums ${
-                        isVoid ? 'line-through text-ink-muted' : 'text-debit'
+                      className={`border-r border-[var(--line-subtle)] px-2.5 py-2 text-right tabular-nums whitespace-nowrap ${
+                        isVoid ? 'line-through text-[var(--ink-muted)]' : 'text-[var(--ok)]'
                       }`}
                     >
                       {formatLedgerCellAmount(debitBig)}
                     </td>
                     <td
-                      className={`border-r border-line-subtle px-2.5 py-2 text-right tabular-nums ${
-                        isVoid ? 'line-through text-ink-muted' : 'text-credit'
+                      className={`border-r border-[var(--line-subtle)] px-2.5 py-2 text-right tabular-nums whitespace-nowrap ${
+                        isVoid ? 'line-through text-[var(--ink-muted)]' : 'text-[var(--ink)]'
                       }`}
                     >
                       {formatLedgerCellAmount(creditBig)}
                     </td>
-                    <td className="border-r border-line-subtle px-2.5 py-2 text-right font-medium tabular-nums text-ink-primary">
+                    <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-right font-medium tabular-nums text-[var(--ink-primary)] whitespace-nowrap">
                       {isVoid ? '—' : formatRupiah(runningBig)}
                     </td>
-                    <td className="border-r border-line-subtle px-2.5 py-2 text-xs">
-                      <div className="flex flex-wrap items-center gap-1">
+                    <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-xs overflow-hidden">
+                      <div className="flex flex-wrap items-center gap-1 overflow-hidden">
                         {isVoid ? <Badge tone="danger">Dibatalkan</Badge> : null}
                         {row.note ? (
-                          <span className="text-ink-secondary">{row.note}</span>
+                          <span className="text-[var(--ink-secondary)] truncate">{row.note}</span>
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-2.5 py-2 text-xs text-ink-muted" />
+                    <td className="px-2.5 py-2 text-xs text-[var(--ink-muted)]" />
                   </tr>
                 );
               })}
             </tbody>
 
             {/* Baris Penutup SISA UANG (DESIGN.md §5.3 & PRD Lampiran A) */}
-            <tfoot className="sticky bottom-0 z-20 border-t-2 border-line-strong bg-surface-subtle font-semibold text-ink-primary">
+            <tfoot className="sticky bottom-0 z-20 border-t-2 border-[var(--line-strong)] bg-[var(--surface-muted)] font-semibold text-[var(--ink-primary)]">
               <tr>
                 <td
                   colSpan={8}
-                  className="border-r border-line-subtle px-3 py-2.5 text-center tracking-wide"
+                  className="border-r border-[var(--line-subtle)] px-3 py-2.5 text-center tracking-wide"
                 >
                   SISA UANG
                 </td>
                 <td
                   data-testid="ledger-sisa-uang"
-                  className="border-r border-line-subtle px-2.5 py-2.5 text-right tabular-nums text-ink-primary"
+                  className="border-r border-[var(--line-subtle)] px-2.5 py-2.5 text-right tabular-nums text-[var(--ink-primary)] whitespace-nowrap"
                 >
                   {formatRupiah(closingBalanceBig)}
                 </td>
-                <td colSpan={2} className="px-2.5 py-2.5 text-xs font-normal text-ink-secondary">
+                <td colSpan={2} className="px-2.5 py-2.5 text-xs font-normal text-[var(--ink-secondary)] truncate">
                   *Biaya admin bank :{' '}
                   {formatRupiah(BigInt(kitchen.adminFeeDefault))}
                 </td>
