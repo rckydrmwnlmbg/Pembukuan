@@ -29,6 +29,15 @@ export default function LoginPage() {
     }
   }, [step]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('confirmed') === 'true') {
+        setSuccessMsg('Email berhasil dikonfirmasi! Silakan masuk dengan akun Anda.');
+      }
+    }
+  }, []);
+
   async function handleCredentialsSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);

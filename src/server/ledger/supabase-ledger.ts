@@ -497,6 +497,7 @@ export async function createTransaction(
     id: string;
     kitchen_id: string;
     period_id: string;
+    parent_transaction_id?: string | null;
     seq_no: number;
     tx_date: string;
     kind: 'incoming' | 'outgoing' | 'admin_fee';
@@ -518,6 +519,7 @@ export async function createTransaction(
       id: mainTxId,
       kitchen_id: kitchenId,
       period_id: targetPeriodId,
+      parent_transaction_id: null,
       seq_no: nextSeq,
       tx_date: input.txDate,
       kind: input.kind,
@@ -543,6 +545,7 @@ export async function createTransaction(
         id: crypto.randomUUID(),
         kitchen_id: kitchenId,
         period_id: targetPeriodId,
+        parent_transaction_id: mainTxId,
         seq_no: nextSeq + 1,
         tx_date: input.txDate,
         kind: 'admin_fee',
@@ -652,6 +655,368 @@ export async function voidTransaction(
   }
 
   return { voidedIds };
+}
+
+/**
+ * Memperbarui transaksi yang ada di database Supabase dengan optimistic locking (version).
+ */
+export async function updateTransaction(
+  supabase: SupabaseClient,
+  userId: string,
+  kitchenId: string,
+  txId: string,
+  input: {
+    version: number;
+    txDate?: string;
+    referenceNo?: string | null;
+    description?: string;
+    amount?: bigint;
+    counterpartyAccount?: string | null;
+    counterpartyName?: string | null;
+    counterpartyBank?: string | null;
+    note?: string | null;
+  },
+): Promise<{ updated: ComputedLedgerRow; summary: PeriodBalanceSummary }> {
+  // 1. Ambil transaksi saat ini untuk verifikasi versi dan status
+  const { data: existing, error: fetchErr } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('id', txId)
+    .eq('kitchen_id', kitchenId)
+    .single();
+
+  if (fetchErr || !existing) {
+    throw new HttpError(404, 'Transaksi tidak ditemukan.');
+  }
+
+  if (existing.status === 'void') {
+    throw new HttpError(409, 'Transaksi yang sudah dibatalkan tidak dapat diedit.');
+  }
+
+  if (existing.version !== input.version) {
+    throw new HttpError(
+      409,
+      'Konflik perubahan: transaksi ini telah diubah oleh sesi lain. Muat ulang halaman lalu coba kembali.',
+    );
+  }
+
+  // 2. Periksa apakah periode masih terbuka
+  const { data: periodRow } = await supabase
+    .from('periods')
+    .select('status')
+    .eq('id', existing.period_id)
+    .single();
+
+  if (periodRow?.status === 'locked') {
+    throw new HttpError(
+      409,
+      'Transaksi tidak dapat diubah karena periode buku kas sudah dikunci.',
+    );
+  }
+
+  const updates: Record<string, unknown> = {
+    version: existing.version + 1,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (input.txDate) updates.tx_date = input.txDate;
+  if (input.referenceNo !== undefined) updates.reference_no = input.referenceNo;
+  if (input.description) updates.description = input.description.trim();
+  if (input.note !== undefined) updates.note = input.note;
+  if (input.counterpartyName !== undefined) updates.counterparty_name = input.counterpartyName;
+  if (input.counterpartyBank !== undefined) updates.counterparty_bank = input.counterpartyBank;
+  if (input.counterpartyAccount !== undefined) {
+    updates.counterparty_account_last4 = input.counterpartyAccount
+      ? extractLast4Digits(input.counterpartyAccount)
+      : null;
+  }
+
+  if (input.amount !== undefined) {
+    const amountNum = Number(input.amount);
+    if (existing.kind === 'incoming') {
+      updates.debit = amountNum;
+      updates.credit = 0;
+    } else {
+      updates.debit = 0;
+      updates.credit = amountNum;
+    }
+  }
+
+  const { error: updateErr } = await supabase
+    .from('transactions')
+    .update(updates)
+    .eq('id', txId);
+
+  if (updateErr) {
+    if (updateErr.message?.includes('unique') || updateErr.message?.includes('duplicate')) {
+      throw new HttpError(
+        409,
+        `Nomor referensi ${input.referenceNo} sudah digunakan pada transaksi lain.`,
+      );
+    }
+    throw new HttpError(500, `Gagal memperbarui transaksi: ${updateErr.message}`);
+  }
+
+  // Jika ini transaksi induk outgoing, perbarui juga tx_date dan reference_no pada transaksi pasangan admin_fee
+  if (existing.kind === 'outgoing') {
+    const pairedUpdates: Record<string, unknown> = {};
+    if (input.txDate) pairedUpdates.tx_date = input.txDate;
+    if (input.referenceNo !== undefined) pairedUpdates.reference_no = input.referenceNo;
+
+    if (Object.keys(pairedUpdates).length > 0) {
+      await supabase
+        .from('transactions')
+        .update(pairedUpdates)
+        .eq('parent_transaction_id', txId)
+        .eq('kitchen_id', kitchenId);
+    }
+  }
+
+  const ledger = await getKitchenLedger(supabase, kitchenId, existing.period_id);
+  const updatedRow = ledger.rows.find((r) => r.id === txId);
+  if (!updatedRow) {
+    throw new HttpError(500, 'Gagal memuat ulang data transaksi setelah diperbarui.');
+  }
+
+  return {
+    updated: updatedRow,
+    summary: ledger.summary,
+  };
+}
+
+/**
+ * Mengunci periode berjalan di database Supabase (PRD FR-F8.1, SECURITY S-15).
+ */
+export async function lockPeriod(
+  supabase: SupabaseClient,
+  userId: string,
+  kitchenId: string,
+  periodId: string,
+  input?: { forceWithUnpostedDrafts?: boolean },
+): Promise<{
+  periodId: string;
+  status: 'locked';
+  nextPeriodOpeningBalance: bigint;
+  summary: PeriodBalanceSummary;
+}> {
+  const { data: periodRow, error: pErr } = await supabase
+    .from('periods')
+    .select('*')
+    .eq('id', periodId)
+    .eq('kitchen_id', kitchenId)
+    .single();
+
+  if (pErr || !periodRow) {
+    throw new HttpError(404, 'Periode tidak ditemukan pada dapur ini.');
+  }
+
+  if (periodRow.status === 'locked') {
+    throw new HttpError(409, 'Periode sudah dalam keadaan terkunci.');
+  }
+
+  // Cek apakah ada bukti transfer yang belum diposting
+  const { data: unpostedUploads } = await supabase
+    .from('uploads')
+    .select('id')
+    .eq('kitchen_id', kitchenId)
+    .in('status', ['uploaded', 'parsed', 'needs_manual']);
+
+  const unpostedCount = unpostedUploads?.length ?? 0;
+  if (unpostedCount > 0 && !input?.forceWithUnpostedDrafts) {
+    throw new HttpError(
+      400,
+      `Terdapat ${unpostedCount} draf bukti transfer yang belum diposting. Selesaikan atau periksa draf terlebih dahulu sebelum mengunci periode.`,
+    );
+  }
+
+  const ledger = await getKitchenLedger(supabase, kitchenId, periodId);
+
+  const { error: lockErr } = await supabase
+    .from('periods')
+    .update({
+      status: 'locked',
+      locked_at: new Date().toISOString(),
+      locked_by: userId,
+    })
+    .eq('id', periodId);
+
+  if (lockErr) {
+    throw new HttpError(500, `Gagal mengunci periode: ${lockErr.message}`);
+  }
+
+  return {
+    periodId,
+    status: 'locked',
+    nextPeriodOpeningBalance: ledger.summary.closingBalance,
+    summary: ledger.summary,
+  };
+}
+
+/**
+ * Membuka kembali periode terkunci di database Supabase (PRD FR-F8.3).
+ */
+export async function unlockPeriod(
+  supabase: SupabaseClient,
+  userId: string,
+  kitchenId: string,
+  periodId: string,
+  input: { reason: string },
+  userRole: string = 'admin',
+): Promise<{ periodId: string; status: 'open' }> {
+  if (userRole !== 'admin') {
+    throw new HttpError(403, 'Hanya admin dapur yang berwenang membuka kembali periode terkunci.');
+  }
+
+  if (!input.reason || input.reason.trim().length < 5) {
+    throw new HttpError(400, 'Alasan pembukaan kembali periode wajib diisi (minimal 5 karakter).');
+  }
+
+  const { data: periodRow, error: pErr } = await supabase
+    .from('periods')
+    .select('*')
+    .eq('id', periodId)
+    .eq('kitchen_id', kitchenId)
+    .single();
+
+  if (pErr || !periodRow) {
+    throw new HttpError(404, 'Periode tidak ditemukan pada dapur ini.');
+  }
+
+  if (periodRow.status !== 'locked') {
+    throw new HttpError(400, 'Periode tidak dalam keadaan terkunci.');
+  }
+
+  const { error: unlockErr } = await supabase
+    .from('periods')
+    .update({
+      status: 'open',
+      reopen_reason: input.reason.trim(),
+      locked_at: null,
+      locked_by: null,
+    })
+    .eq('id', periodId);
+
+  if (unlockErr) {
+    throw new HttpError(500, `Gagal membuka kembali periode: ${unlockErr.message}`);
+  }
+
+  return {
+    periodId,
+    status: 'open',
+  };
+}
+
+/**
+ * Membuka periode baru secara otomatis dari saldo akhir periode yang terkunci di Supabase (PRD FR-F8.2).
+ */
+export async function transitionToNextPeriod(
+  supabase: SupabaseClient,
+  userId: string,
+  kitchenId: string,
+): Promise<{
+  periodId: string;
+  year: number;
+  month: number;
+  openingBalance: bigint;
+  status: 'open';
+}> {
+  const { data: activePeriods, error: pErr } = await supabase
+    .from('periods')
+    .select('*')
+    .eq('kitchen_id', kitchenId)
+    .order('year', { ascending: false })
+    .order('month', { ascending: false })
+    .limit(1);
+
+  const activePeriod = activePeriods?.[0];
+  if (pErr || !activePeriod) {
+    throw new HttpError(404, 'Periode tidak ditemukan.');
+  }
+
+  if (activePeriod.status !== 'locked') {
+    throw new HttpError(
+      400,
+      'Periode saat ini harus dikunci terlebih dahulu sebelum melanjutkan ke periode berikutnya.',
+    );
+  }
+
+  let nextMonth = activePeriod.month + 1;
+  let nextYear = activePeriod.year;
+  if (nextMonth > 12) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+
+  const ledger = await getKitchenLedger(supabase, kitchenId, activePeriod.id);
+  const nextOpeningBalance = ledger.summary.closingBalance;
+  const newPeriodId = crypto.randomUUID();
+
+  const { error: insErr } = await supabase.from('periods').insert({
+    id: newPeriodId,
+    kitchen_id: kitchenId,
+    year: nextYear,
+    month: nextMonth,
+    opening_balance: Number(nextOpeningBalance),
+    status: 'open',
+  });
+
+  if (insErr) {
+    if (insErr.message?.includes('duplicate key') || insErr.message?.includes('unique')) {
+      throw new HttpError(409, `Periode ${nextMonth}/${nextYear} sudah ada.`);
+    }
+    throw new HttpError(500, `Gagal membuat periode baru: ${insErr.message}`);
+  }
+
+  return {
+    periodId: newPeriodId,
+    year: nextYear,
+    month: nextMonth,
+    openingBalance: nextOpeningBalance,
+    status: 'open',
+  };
+}
+
+export interface SupabaseAuditRecord {
+  id: string;
+  kitchenId: string;
+  actorId: string;
+  action: string;
+  entity: string;
+  entityId: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown>;
+  createdAt: string;
+}
+
+/**
+ * Mengambil jejak audit dari tabel public.audit_logs di Supabase.
+ */
+export async function getKitchenAuditLogs(
+  supabase: SupabaseClient,
+  kitchenId: string,
+): Promise<readonly SupabaseAuditRecord[]> {
+  const { data: rows, error } = await supabase
+    .from('audit_logs')
+    .select('*')
+    .eq('kitchen_id', kitchenId)
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  if (error || !rows) {
+    return [];
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    kitchenId: r.kitchen_id,
+    actorId: r.actor_id || 'system',
+    action: r.action,
+    entity: r.entity,
+    entityId: r.entity_id,
+    before: r.before as Record<string, unknown> | null,
+    after: (r.after as Record<string, unknown>) || {},
+    createdAt: r.created_at,
+  }));
 }
 
 function mapDbUploadToRecord(row: Record<string, unknown>): UploadRecord {

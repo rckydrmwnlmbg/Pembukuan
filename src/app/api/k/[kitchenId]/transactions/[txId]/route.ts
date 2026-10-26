@@ -6,7 +6,11 @@ import {
 } from '@/lib/schemas/transaction';
 import { UuidSchema } from '@/lib/schemas/common';
 import { defaultLedgerStore } from '@/server/ledger/service';
-import { voidTransaction as voidSupabaseTransaction, getKitchenLedger as getSupabaseKitchenLedger } from '@/server/ledger/supabase-ledger';
+import {
+  voidTransaction as voidSupabaseTransaction,
+  updateTransaction as updateSupabaseTransaction,
+  getKitchenLedger as getSupabaseKitchenLedger,
+} from '@/server/ledger/supabase-ledger';
 import { HttpError } from '@/server/http/errors';
 
 const EmptyGetQuerySchema = z.object({}).strict();
@@ -152,6 +156,42 @@ export const PATCH = kitchenRoute(
       note: input.note,
     });
 
+    // 1. Perbarui di Supabase jika pengguna nyata
+    if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+      try {
+        const realResult = await updateSupabaseTransaction(
+          supabase,
+          user.id,
+          kitchenId,
+          txId,
+          updateInput,
+        );
+
+        return Response.json({
+          updated: {
+            ...realResult.updated,
+            debit: realResult.updated.debit.toString(),
+            credit: realResult.updated.credit.toString(),
+            runningBalance: realResult.updated.runningBalance.toString(),
+            version: realResult.updated.version ?? input.version + 1,
+          },
+          summary: {
+            openingBalance: realResult.summary.openingBalance.toString(),
+            totalIncoming: realResult.summary.totalIncoming.toString(),
+            totalOutgoing: realResult.summary.totalOutgoing.toString(),
+            closingBalance: realResult.summary.closingBalance.toString(),
+            incomingCount: realResult.summary.incomingCount,
+            outgoingCount: realResult.summary.outgoingCount,
+          },
+        });
+      } catch (err: unknown) {
+        if (err instanceof Error && !err.message.includes('fetch failed')) {
+          throw err;
+        }
+      }
+    }
+
+    // 2. Fallback untuk sesi demo testing
     const result = defaultLedgerStore.updateTransaction(
       kitchenId,
       txId,
