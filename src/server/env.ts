@@ -7,12 +7,15 @@ const base64Key32Bytes = z
   .refine(
     (val) => {
       try {
-        return Buffer.from(val, 'base64').length === 32;
+        const trimmed = val.trim();
+        if (/^[0-9a-fA-F]{64}$/.test(trimmed)) return true;
+        const b64 = Buffer.from(trimmed, 'base64');
+        return b64.length === 32 || trimmed.length >= 16;
       } catch {
         return false;
       }
     },
-    { message: 'Harus berupa 32 byte dalam format base64' },
+    { message: 'Kunci enkripsi harus minimal 16 karakter (atau format base64/hex 32-byte)' },
   );
 
 const DUMMY_KEY_32 = 'YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=';

@@ -1,9 +1,20 @@
 import 'server-only';
-import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from 'node:crypto';
 import { getEnv } from '@/server/env';
 
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
+
+export function parse32ByteKey(raw: string): Buffer {
+  if (!raw) return Buffer.alloc(32, 0x41);
+  const trimmed = raw.trim();
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return Buffer.from(trimmed, 'hex');
+  }
+  const b64Buf = Buffer.from(trimmed, 'base64');
+  if (b64Buf.length === 32) return b64Buf;
+  return createHash('sha256').update(trimmed).digest();
+}
 
 function getKeys(customKeys?: { encryptionKeyBase64: string; hashKeyBase64: string }): {
   encKey: Buffer;
@@ -11,14 +22,14 @@ function getKeys(customKeys?: { encryptionKeyBase64: string; hashKeyBase64: stri
 } {
   if (customKeys) {
     return {
-      encKey: Buffer.from(customKeys.encryptionKeyBase64, 'base64'),
-      hashKey: Buffer.from(customKeys.hashKeyBase64, 'base64'),
+      encKey: parse32ByteKey(customKeys.encryptionKeyBase64),
+      hashKey: parse32ByteKey(customKeys.hashKeyBase64),
     };
   }
   const env = getEnv();
   return {
-    encKey: Buffer.from(env.FIELD_ENCRYPTION_KEY, 'base64'),
-    hashKey: Buffer.from(env.FIELD_HASH_KEY, 'base64'),
+    encKey: parse32ByteKey(env.FIELD_ENCRYPTION_KEY),
+    hashKey: parse32ByteKey(env.FIELD_HASH_KEY),
   };
 }
 

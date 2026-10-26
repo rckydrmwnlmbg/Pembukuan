@@ -71,15 +71,6 @@ export async function validatePdfBytes(
     );
   }
 
-  // Deteksi proteksi kata sandi (/Encrypt di trailer/dictionary) atau kerusakan struktur PDF (PRD E2)
-  const rawLatin1 = Buffer.from(bytes).toString('latin1');
-  if (/\/Encrypt\b/.test(rawLatin1)) {
-    throw new HttpError(
-      422,
-      'Berkas PDF diproteksi kata sandi. Unggah berkas PDF tanpa kata sandi.',
-    );
-  }
-
   let pdfDoc: PDFDocument;
   try {
     pdfDoc = await PDFDocument.load(bytes, {
@@ -100,7 +91,11 @@ export async function validatePdfBytes(
     );
   }
 
-  if (pdfDoc.isEncrypted) {
+  // Deteksi dokumen terenkripsi jika lolos dari load
+  if (
+    (pdfDoc as unknown as { isEncrypted?: boolean }).isEncrypted ||
+    Boolean(pdfDoc.context?.trailerInfo?.Encrypt)
+  ) {
     throw new HttpError(
       422,
       'Berkas PDF diproteksi kata sandi. Unggah berkas PDF tanpa kata sandi.',

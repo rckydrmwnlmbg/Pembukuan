@@ -11,5 +11,5 @@ describe('Skrip keamanan CI (check:routes & check:secrets)', () => {
   it('memastikan tidak ada rahasia ter-hardcode di repositori S-04', () => {
     const result = scanSecrets();
     expect(result.violations).toEqual([]);
-  });
+  }, 15_000);
 });

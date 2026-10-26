@@ -4,7 +4,10 @@ import { formatPeriodLabel } from '@/lib/format';
 import { requireUser } from '@/server/auth/require-user';
 import { defaultLedgerStore } from '@/server/ledger/service';
 import { defaultUploadStore } from '@/server/upload/service';
-import { getKitchenLedger as getSupabaseKitchenLedger } from '@/server/ledger/supabase-ledger';
+import {
+  getKitchenLedger as getSupabaseKitchenLedger,
+  listSupabaseUploads,
+} from '@/server/ledger/supabase-ledger';
 import {
   LedgerWorkspace,
   type SerializedKitchenInfo,
@@ -98,10 +101,20 @@ export default async function KitchenLedgerPage({ params }: LedgerPageProps) {
     closingBalance: ledgerData.summary.closingBalance.toString(),
   };
 
-  const reviewQueueCount = defaultUploadStore.listKitchenUploads(
-    kitchenId,
-    'reviewable',
-  ).length;
+  let reviewQueueCount = 0;
+  if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+    try {
+      const reviewable = await listSupabaseUploads(supabase, kitchenId, 'reviewable');
+      reviewQueueCount = reviewable.length;
+    } catch {
+      reviewQueueCount = 0;
+    }
+  } else {
+    reviewQueueCount = defaultUploadStore.listKitchenUploads(
+      kitchenId,
+      'reviewable',
+    ).length;
+  }
 
   return (
     <main className="space-y-5">

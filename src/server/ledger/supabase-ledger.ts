@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/server/supabase/admin';
 import { encryptField, hashForLookup, extractLast4Digits } from '@/server/crypto/field';
 import { HttpError } from '@/server/http/errors';
+import { logger } from '@/server/logging/logger';
 import {
   computePeriodLedger,
   type ComputedLedgerRow,
@@ -10,6 +11,29 @@ import {
   type PeriodBalanceSummary,
 } from '@/lib/ledger-math';
 import type { CreateTransactionInput } from '@/lib/schemas/transaction';
+import type { PostUploadReviewInput } from '@/lib/schemas/upload';
+import {
+  validateAndNormalizeTransferProofBytes,
+  type NormalizedUploadFile,
+} from '@/server/extraction/normalize-image';
+import {
+  aiExtract,
+  getExtractionEnv,
+  type Extracted,
+} from '@/server/extraction/ai-extract';
+import {
+  consistencyFlags,
+  CONSISTENCY_FLAG_DESCRIPTIONS,
+  getLowConfidenceFields,
+  shouldFallbackToNeedsManual,
+} from '@/server/extraction/checks';
+import { extractLimiter } from '@/server/security/rate-limit';
+import {
+  type UploadRecord,
+  type CounterpartyRuleRecord,
+  MAX_BATCH_FILES,
+  defaultUploadStore,
+} from '@/server/upload/service';
 
 export interface SupabaseKitchenMeta {
   id: string;
@@ -355,18 +379,22 @@ export async function createKitchen(
   }
 
   // 3. Daftarkan user pembuat sebagai 'admin' di dapur ini
-  await adminClient.from('kitchen_members').insert({
+  const { error: memErr } = await adminClient.from('kitchen_members').insert({
     kitchen_id: kitchenId,
     user_id: userId,
     role: 'admin',
   });
+
+  if (memErr) {
+    throw new HttpError(500, `Gagal mendaftarkan anggota dapur: ${memErr.message}`);
+  }
 
   // 4. Daftarkan rekening bank
   const accountNoEnc = encryptField(input.accountNo);
   const accountNoHash = hashForLookup(input.accountNo);
   const accountNoLast4 = extractLast4Digits(input.accountNo);
 
-  await adminClient.from('bank_accounts').insert({
+  const { error: bankErr } = await adminClient.from('bank_accounts').insert({
     kitchen_id: kitchenId,
     bank_code: input.bankCode.trim().toUpperCase(),
     label: input.name.trim(),
@@ -376,8 +404,12 @@ export async function createKitchen(
     kind: 'operasional',
   });
 
+  if (bankErr) {
+    throw new HttpError(500, `Gagal mendaftarkan rekening bank: ${bankErr.message}`);
+  }
+
   // 5. Buat periode buku kas awal
-  await adminClient.from('periods').insert({
+  const { error: pErr } = await adminClient.from('periods').insert({
     id: periodId,
     kitchen_id: kitchenId,
     year,
@@ -385,6 +417,10 @@ export async function createKitchen(
     opening_balance: Number(openingBalance),
     status: 'open',
   });
+
+  if (pErr) {
+    throw new HttpError(500, `Gagal membuat periode awal: ${pErr.message}`);
+  }
 
   const summary: PeriodBalanceSummary = {
     openingBalance,
@@ -616,4 +652,499 @@ export async function voidTransaction(
   }
 
   return { voidedIds };
+}
+
+function mapDbUploadToRecord(row: Record<string, unknown>): UploadRecord {
+  const pr = (row.parse_result as Record<string, unknown>) || {};
+  return {
+    id: row.id as string,
+    kitchenId: row.kitchen_id as string,
+    periodId: (row.period_id as string) || '',
+    storagePath: row.storage_path as string,
+    originalName: row.original_name as string,
+    mime: row.mime as 'application/pdf' | 'image/jpeg' | 'image/png',
+    sizeBytes: Number(row.size_bytes),
+    sha256: row.sha256 as string,
+    status: row.status as 'parsed' | 'needs_manual' | 'failed' | 'posted',
+    parserUsed: (row.parser_used as 'ai' | 'manual' | 'rate_limited') || 'ai',
+    txDate: (pr.txDate as string) ?? null,
+    referenceNo: (pr.referenceNo as string) ?? null,
+    amount: (pr.amount as string) ?? null,
+    senderAccount: (pr.senderAccount as string) ?? null,
+    recipientAccount: (pr.recipientAccount as string) ?? null,
+    recipientName: (pr.recipientName as string) ?? null,
+    recipientBank: (pr.recipientBank as string) ?? null,
+    memo: (pr.memo as string) ?? null,
+    suggestedDescription: (pr.suggestedDescription as string) ?? null,
+    matchedRuleId: (pr.matchedRuleId as string) ?? null,
+    suggestedKitchenId:
+      (row.suggested_kitchen_id as string) || (pr.suggestedKitchenId as string) || null,
+    suggestedKitchenName: (pr.suggestedKitchenName as string) ?? null,
+    wrongKitchenWarning: (pr.wrongKitchenWarning as string) ?? null,
+    suggestedIncludeAdminFee: Boolean(pr.suggestedIncludeAdminFee),
+    suggestedAdminFeeAmount: (pr.suggestedAdminFeeAmount as string) ?? '6500',
+    consistencyFlags:
+      (row.consistency_flags as string[]) || (pr.consistencyFlags as string[]) || [],
+    consistencyReasons:
+      (pr.consistencyReasons as Array<{ code: string; message: string }>) || [],
+    lowConfidenceFields: (pr.lowConfidenceFields as string[]) || [],
+    confidence: (pr.confidence as Record<string, number>) || {},
+    fallbackReason: (pr.fallbackReason as string) ?? null,
+    postedTransactionId: (pr.postedTransactionId as string) ?? null,
+    uploadedBy: row.uploaded_by as string,
+    createdAt: row.created_at as string,
+  };
+}
+
+/**
+ * Mengambil daftar bukti transfer dari tabel public.uploads Supabase.
+ */
+export async function listSupabaseUploads(
+  supabase: SupabaseClient,
+  kitchenId: string,
+  statusFilter: 'all' | 'reviewable' | 'parsed' | 'needs_manual' | 'posted' = 'all',
+): Promise<UploadRecord[]> {
+  let query = supabase
+    .from('uploads')
+    .select('*')
+    .eq('kitchen_id', kitchenId)
+    .order('created_at', { ascending: false });
+
+  if (statusFilter === 'reviewable') {
+    query = query.in('status', ['parsed', 'needs_manual', 'uploaded']);
+  } else if (statusFilter !== 'all') {
+    query = query.eq('status', statusFilter);
+  }
+
+  const { data: rows, error } = await query;
+  if (error || !rows) {
+    return [];
+  }
+
+  return rows.map((r) => mapDbUploadToRecord(r as Record<string, unknown>));
+}
+
+/**
+ * Memproses unggahan bukti transfer ke Supabase (Storage + Database public.uploads).
+ */
+export async function processBatchUploadToSupabase(
+  supabase: SupabaseClient,
+  kitchenId: string,
+  userId: string,
+  files: readonly { name: string; bytes: Uint8Array }[],
+): Promise<UploadRecord[]> {
+  if (files.length === 0) {
+    throw new HttpError(422, 'Pilih minimal 1 berkas bukti transfer.');
+  }
+  if (files.length > MAX_BATCH_FILES) {
+    throw new HttpError(422, `Maksimal ${MAX_BATCH_FILES} berkas per unggahan.`);
+  }
+
+  const ledgerData = await getKitchenLedger(supabase, kitchenId);
+  const kitchenMeta = ledgerData.kitchen;
+  const existingRefs = new Set<string>(
+    ledgerData.rows
+      .filter((r) => r.status !== 'void' && r.referenceNo !== null)
+      .map((r) => r.referenceNo!),
+  );
+
+  const results: UploadRecord[] = [];
+
+  for (const fileItem of files) {
+    const normalized: NormalizedUploadFile =
+      await validateAndNormalizeTransferProofBytes(
+        fileItem.bytes,
+        fileItem.name,
+        kitchenId,
+      );
+
+    // Cek duplikat SHA-256 pada database Supabase (PRD E6)
+    const { data: existingDup } = await supabase
+      .from('uploads')
+      .select('id, status, parse_result')
+      .eq('kitchen_id', kitchenId)
+      .eq('sha256', normalized.sha256)
+      .neq('status', 'failed')
+      .maybeSingle();
+
+    if (existingDup) {
+      const ref = (existingDup.parse_result as Record<string, unknown>)?.referenceNo;
+      const refInfo = ref ? `, referensi ${ref}` : '';
+      throw new HttpError(
+        409,
+        `Berkas "${normalized.displayName}" sudah pernah diunggah di dapur ini (ID unggahan: ${existingDup.id}${refInfo}).`,
+      );
+    }
+
+    // Unggah ke Supabase Storage bucket 'uploads'
+    try {
+      await supabase.storage
+        .from('uploads')
+        .upload(normalized.storagePath, normalized.bytes, {
+          contentType: normalized.mediaType,
+          upsert: true,
+        });
+    } catch {
+      // Storage upload non-fatal bila bucket belum dibuat di dashboard
+    }
+
+    const env = getExtractionEnv();
+    let extracted: Extracted | null = null;
+    let parserUsed: 'ai' | 'manual' | 'rate_limited' = 'ai';
+    let fallbackReason: string | null = null;
+
+    if (env.EXTRACTION_MODE === 'manual') {
+      parserUsed = 'manual';
+      fallbackReason = 'Mode ekstraksi manual aktif. Silakan isi formulir secara manual.';
+    } else {
+      const rateCheck = await extractLimiter.limit(`extract:${userId}`);
+      if (!rateCheck.success) {
+        parserUsed = 'rate_limited';
+        fallbackReason = 'Batas laju ekstraksi tercapai. Silakan isi formulir secara manual.';
+      } else {
+        try {
+          extracted = await aiExtract({
+            mediaType: normalized.mediaType,
+            base64: Buffer.from(normalized.bytes).toString('base64'),
+          });
+        } catch {
+          extracted = null;
+        }
+        if (!extracted) {
+          fallbackReason =
+            'Penyedia AI tidak merespons atau berkas tidak terbaca. Silakan lengkapi formulir review secara manual.';
+        }
+      }
+    }
+
+    const isNeedsManual = shouldFallbackToNeedsManual(extracted);
+    const status: 'parsed' | 'needs_manual' = isNeedsManual ? 'needs_manual' : 'parsed';
+    if (isNeedsManual && !fallbackReason) {
+      fallbackReason =
+        'Nominal atau tanggal bukti transfer tidak terbaca dengan yakin. Silakan lengkapi secara manual.';
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const flags = extracted
+      ? consistencyFlags(extracted, {
+          today: todayStr,
+          amountThreshold: kitchenMeta.highAmountThreshold,
+          existingReferenceNos: existingRefs,
+        })
+      : ['nominal_tidak_valid'];
+
+    const reasons = flags.map((code) => ({
+      code,
+      message:
+        CONSISTENCY_FLAG_DESCRIPTIONS[code] ??
+        `Periksa kembali field terkait (${code}).`,
+    }));
+
+    const lowConfidenceFields = extracted
+      ? getLowConfidenceFields(extracted.confidence)
+      : ['txDate', 'referenceNo', 'amount'];
+
+    // Usulan deskripsi dari counterparty_rules di database Supabase
+    let suggestedDescription: string | null = extracted?.memo ?? null;
+    let matchedRuleId: string | null = null;
+
+    if (extracted?.recipientAccount) {
+      try {
+        const cleanDigits = extracted.recipientAccount.replace(/\D/g, '');
+        if (cleanDigits.length >= 4) {
+          const accHash = hashForLookup(cleanDigits);
+          const { data: matchedRule } = await supabase
+            .from('counterparty_rules')
+            .select('*')
+            .eq('match_account_no_hash', accHash)
+            .maybeSingle();
+
+          if (matchedRule?.description_template) {
+            suggestedDescription = matchedRule.description_template;
+            matchedRuleId = matchedRule.id;
+          }
+        }
+      } catch {
+        // Abaikan
+      }
+    }
+
+    const recipientBank = extracted?.recipientBank ?? null;
+    const suggestedIncludeAdminFee = Boolean(
+      recipientBank &&
+        recipientBank.trim().toUpperCase() !== kitchenMeta.bankCode.trim().toUpperCase(),
+    );
+
+    const uploadId = crypto.randomUUID();
+    const parseResultObj = {
+      txDate: extracted?.txDate ?? null,
+      referenceNo: extracted?.referenceNo ?? null,
+      amount: extracted?.amount ?? null,
+      senderAccount: extracted?.senderAccount ?? null,
+      recipientAccount: extracted?.recipientAccount ?? null,
+      recipientName: extracted?.recipientName ?? null,
+      recipientBank,
+      memo: extracted?.memo ?? null,
+      suggestedDescription,
+      matchedRuleId,
+      suggestedKitchenId: kitchenId,
+      suggestedKitchenName: kitchenMeta.name,
+      wrongKitchenWarning: null,
+      suggestedIncludeAdminFee,
+      suggestedAdminFeeAmount: kitchenMeta.adminFeeDefault.toString(),
+      consistencyFlags: flags,
+      consistencyReasons: reasons,
+      lowConfidenceFields,
+      confidence: extracted?.confidence ?? {},
+      fallbackReason,
+      postedTransactionId: null,
+    };
+
+    const { error: insErr } = await supabase.from('uploads').insert({
+      id: uploadId,
+      kitchen_id: kitchenId,
+      period_id: kitchenMeta.periodId,
+      storage_path: normalized.storagePath,
+      original_name: normalized.displayName,
+      mime: normalized.mediaType,
+      size_bytes: normalized.bytes.byteLength,
+      sha256: normalized.sha256,
+      status,
+      parser_used: parserUsed,
+      parse_result: parseResultObj,
+      consistency_flags: flags,
+      uploaded_by: userId,
+    });
+
+    if (insErr) {
+      throw new HttpError(
+        500,
+        `Gagal menyimpan bukti transfer ke database: ${insErr.message}`,
+      );
+    }
+
+    const record: UploadRecord = {
+      id: uploadId,
+      kitchenId,
+      periodId: kitchenMeta.periodId,
+      storagePath: normalized.storagePath,
+      originalName: normalized.displayName,
+      mime: normalized.mediaType,
+      sizeBytes: normalized.bytes.byteLength,
+      sha256: normalized.sha256,
+      status,
+      parserUsed,
+      txDate: parseResultObj.txDate,
+      referenceNo: parseResultObj.referenceNo,
+      amount: parseResultObj.amount,
+      senderAccount: parseResultObj.senderAccount,
+      recipientAccount: parseResultObj.recipientAccount,
+      recipientName: parseResultObj.recipientName,
+      recipientBank: parseResultObj.recipientBank,
+      memo: parseResultObj.memo,
+      suggestedDescription,
+      matchedRuleId,
+      suggestedKitchenId: kitchenId,
+      suggestedKitchenName: kitchenMeta.name,
+      wrongKitchenWarning: null,
+      suggestedIncludeAdminFee,
+      suggestedAdminFeeAmount: kitchenMeta.adminFeeDefault.toString(),
+      consistencyFlags: flags,
+      consistencyReasons: reasons,
+      lowConfidenceFields,
+      confidence: parseResultObj.confidence,
+      fallbackReason,
+      postedTransactionId: null,
+      uploadedBy: userId,
+      createdAt: new Date().toISOString(),
+    };
+
+    results.push(record);
+
+    logger.info(
+      {
+        uploadId,
+        kitchenId,
+        mime: record.mime,
+        sizeBytes: record.sizeBytes,
+        status: record.status,
+        parserUsed: record.parserUsed,
+      },
+      'upload_processed_supabase',
+    );
+  }
+
+  return results;
+}
+
+/**
+ * Mengambil byte berkas bukti transfer dari Supabase Storage.
+ */
+export async function getSupabaseUploadFileBytes(
+  supabase: SupabaseClient,
+  kitchenId: string,
+  uploadId: string,
+): Promise<{ bytes: Uint8Array; mime: string; displayName: string }> {
+  const { data: uploadRow, error } = await supabase
+    .from('uploads')
+    .select('*')
+    .eq('id', uploadId)
+    .eq('kitchen_id', kitchenId)
+    .single();
+
+  if (error || !uploadRow) {
+    throw new HttpError(404, 'Berkas unggahan tidak ditemukan.');
+  }
+
+  try {
+    const { data: fileData, error: dlErr } = await supabase.storage
+      .from('uploads')
+      .download(uploadRow.storage_path);
+
+    if (!dlErr && fileData) {
+      const buf = await fileData.arrayBuffer();
+      return {
+        bytes: new Uint8Array(buf),
+        mime: uploadRow.mime,
+        displayName: uploadRow.original_name,
+      };
+    }
+  } catch {
+    // Abaikan
+  }
+
+  return defaultUploadStore.getUploadFileBytes(kitchenId, uploadId);
+}
+
+/**
+ * Memposting bukti transfer ke buku kas Supabase setelah direview pengguna.
+ */
+export async function postSupabaseReviewedUpload(
+  supabase: SupabaseClient,
+  kitchenId: string,
+  uploadId: string,
+  userId: string,
+  input: PostUploadReviewInput,
+): Promise<{
+  upload: UploadRecord;
+  createdTransactions: ComputedLedgerRow[];
+  summary: PeriodBalanceSummary;
+  savedRule: CounterpartyRuleRecord | null;
+}> {
+  const { data: uploadRow, error: fetchErr } = await supabase
+    .from('uploads')
+    .select('*')
+    .eq('id', uploadId)
+    .eq('kitchen_id', kitchenId)
+    .single();
+
+  if (fetchErr || !uploadRow) {
+    throw new HttpError(404, 'Bukti transfer tidak ditemukan.');
+  }
+
+  if (uploadRow.status === 'posted') {
+    throw new HttpError(409, 'Bukti transfer ini sudah pernah diposting ke buku kas.');
+  }
+
+  const pr = (uploadRow.parse_result as Record<string, unknown>) || {};
+  if (pr.wrongKitchenWarning && !input.confirmWrongKitchen) {
+    throw new HttpError(
+      422,
+      `${pr.wrongKitchenWarning} Centang konfirmasi bahwa Anda yakin ingin memposting ke dapur ini.`,
+    );
+  }
+
+  const finalRecipientName = input.isPayrollMassal
+    ? input.counterpartyName?.trim() || 'Rekening Masing-Masing Relawan'
+    : (input.counterpartyName ?? null);
+
+  const { created, summary } = await createTransaction(supabase, userId, kitchenId, {
+    periodId: input.periodId ?? uploadRow.period_id,
+    txDate: input.txDate,
+    kind: input.kind ?? 'outgoing',
+    referenceNo: input.referenceNo ?? null,
+    description: input.description,
+    amount: input.amount,
+    counterpartyAccount: input.counterpartyAccount ?? null,
+    counterpartyName: finalRecipientName,
+    counterpartyBank: input.counterpartyBank ?? null,
+    note: input.note ?? null,
+    includeAdminFee: input.includeAdminFee ?? false,
+    adminFeeAmount: input.adminFeeAmount,
+  });
+
+  const mainCreatedId = created[0]?.id;
+  if (mainCreatedId) {
+    await supabase
+      .from('transactions')
+      .update({ source_upload_id: uploadId })
+      .eq('id', mainCreatedId);
+  }
+
+  let savedRule: CounterpartyRuleRecord | null = null;
+  const cleanRecipient = (input.counterpartyAccount || '').replace(/\D/g, '');
+  if (input.saveCounterpartyRule && cleanRecipient.length >= 4) {
+    try {
+      const accountHash = hashForLookup(cleanRecipient);
+      const { data: kRow } = await supabase
+        .from('kitchens')
+        .select('organization_id')
+        .eq('id', kitchenId)
+        .single();
+
+      if (kRow?.organization_id) {
+        const { data: insertedRule } = await supabase
+          .from('counterparty_rules')
+          .upsert(
+            {
+              organization_id: kRow.organization_id,
+              match_account_no_hash: accountHash,
+              counterparty_name: finalRecipientName,
+              counterparty_bank: input.counterpartyBank || null,
+              description_template: input.description.trim(),
+              last_used_at: new Date().toISOString(),
+            },
+            { onConflict: 'organization_id,match_account_no_hash' },
+          )
+          .select()
+          .maybeSingle();
+
+        if (insertedRule) {
+          savedRule = {
+            id: insertedRule.id,
+            organizationId: insertedRule.organization_id,
+            matchAccountNoHash: insertedRule.match_account_no_hash,
+            descriptionTemplate: insertedRule.description_template,
+            timesUsed: insertedRule.times_used || 1,
+            lastUsedAt: insertedRule.last_used_at,
+          };
+        }
+      }
+    } catch {
+      // Aturan counterparty opsional
+    }
+  }
+
+  const updatedPr = {
+    ...pr,
+    postedTransactionId: mainCreatedId || null,
+  };
+
+  await supabase
+    .from('uploads')
+    .update({
+      status: 'posted',
+      parse_result: updatedPr,
+    })
+    .eq('id', uploadId);
+
+  uploadRow.status = 'posted';
+  uploadRow.parse_result = updatedPr;
+
+  return {
+    upload: mapDbUploadToRecord(uploadRow as Record<string, unknown>),
+    createdTransactions: created,
+    summary,
+    savedRule,
+  };
 }

@@ -8,7 +8,8 @@ import { HttpError } from '@/server/http/errors';
 const GetKitchensSchema = z.object({});
 
 const ManageKitchenSchema = z.object({
-  action: z.enum(['create', 'clear_demo']),
+  action: z.enum(['create', 'clear_demo', 'delete']),
+  kitchenId: z.string().uuid().optional(),
   name: z.string().min(1).max(100).optional(),
   code: z.string().min(2).max(20).optional(),
   pjName: z.string().min(1).max(100).optional(),
@@ -19,40 +20,39 @@ const ManageKitchenSchema = z.object({
 });
 
 export const GET = userRoute(GetKitchensSchema, async ({ supabase, user }) => {
-  // 1. Coba ambil dari Supabase nyata terlebih dahulu
+  // 1. Ambil dari Supabase nyata untuk pengguna terotentikasi riil
   if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
     try {
       const realKitchens = await listUserKitchens(supabase, user.id);
-      if (realKitchens.length > 0) {
-        return Response.json({
-          kitchens: realKitchens.map((k) => ({
-            id: k.id,
-            code: k.code,
-            name: k.name,
-            pjName: k.pjName,
-            bankCode: k.bankCode,
-            accountNoLast4: k.accountNoLast4,
-            openingBalance: k.openingBalance.toString(),
-            adminFeeDefault: k.adminFeeDefault.toString(),
-            periodId: k.periodId,
-            year: k.year,
-            month: k.month,
-            periodStatus: k.periodStatus,
-            summary: {
-              openingBalance: k.summary.openingBalance.toString(),
-              totalIncoming: k.summary.totalIncoming.toString(),
-              totalOutgoing: k.summary.totalOutgoing.toString(),
-              closingBalance: k.summary.closingBalance.toString(),
-            },
-          })),
-        });
-      }
+      return Response.json({
+        kitchens: realKitchens.map((k) => ({
+          id: k.id,
+          code: k.code,
+          name: k.name,
+          pjName: k.pjName,
+          bankCode: k.bankCode,
+          accountNoLast4: k.accountNoLast4,
+          openingBalance: k.openingBalance.toString(),
+          adminFeeDefault: k.adminFeeDefault.toString(),
+          periodId: k.periodId,
+          year: k.year,
+          month: k.month,
+          periodStatus: k.periodStatus,
+          summary: {
+            openingBalance: k.summary.openingBalance.toString(),
+            totalIncoming: k.summary.totalIncoming.toString(),
+            totalOutgoing: k.summary.totalOutgoing.toString(),
+            closingBalance: k.summary.closingBalance.toString(),
+          },
+        })),
+      });
     } catch {
-      // Jika tabel belum di-migrate, teruskan ke fallback
+      // Jika terjadi galat pembacaan Supabase, kembalikan daftar kosong untuk pengguna nyata, jangan tampilkan data demo
+      return Response.json({ kitchens: [] });
     }
   }
 
-  // 2. Fallback untuk mock store / unit tests
+  // 2. Fallback HANYA untuk pengguna demo sintetis lokal / unit tests
   const kitchens = defaultLedgerStore.listKitchenMeta().map((k) => ({
     id: k.id,
     code: k.code,
@@ -81,6 +81,28 @@ export const POST = userRoute(ManageKitchenSchema, async ({ supabase, user, inpu
   if (input.action === 'clear_demo') {
     defaultLedgerStore.clearDemoKitchens();
     return Response.json({ success: true, message: 'Data demo telah dibersihkan.' });
+  }
+
+  if (input.action === 'delete') {
+    if (!input.kitchenId) {
+      throw new HttpError(400, 'kitchenId wajib dicantumkan untuk menghapus dapur.');
+    }
+    if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+      try {
+        await supabase
+          .from('kitchen_members')
+          .delete()
+          .eq('kitchen_id', input.kitchenId)
+          .eq('user_id', user.id);
+        await supabase
+          .from('kitchens')
+          .update({ status: 'archived' })
+          .eq('id', input.kitchenId);
+      } catch {
+        // Abaikan jika tidak di DB
+      }
+    }
+    return Response.json({ success: true, message: 'Dapur berhasil dihapus.' });
   }
 
   if (input.action === 'create') {

@@ -2,6 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import { HttpError } from '@/server/http/errors';
 import { logger } from '@/server/logging/logger';
+import { extractPayloadFromPdf } from './pdf-helper';
 
 const ExtractionEnvSchema = z.object({
   EXTRACTION_MODE: z.enum(['ai', 'manual']).default('ai'),
@@ -235,12 +236,59 @@ export async function aiExtract(
   // Jalur OpenAI-Compatible Vision (misal: bandelbanget.xyz, OpenAI, dll.)
   if (env.AI_BASE_URL) {
     const endpoint = `${env.AI_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
-    const imagePart = {
-      type: 'image_url',
-      image_url: {
-        url: `data:${file.mediaType};base64,${file.base64}`,
-      },
-    };
+    type MessageContentItem =
+      | { type: 'text'; text: string }
+      | { type: 'image_url'; image_url: { url: string } };
+
+    let userContent: MessageContentItem[];
+
+    if (file.mediaType === 'application/pdf') {
+      const pdfPayload = await extractPayloadFromPdf(
+        Buffer.from(file.base64, 'base64'),
+      );
+
+      if (pdfPayload.image) {
+        userContent = [
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${pdfPayload.image.mime};base64,${Buffer.from(pdfPayload.image.bytes).toString('base64')}`,
+            },
+          },
+          {
+            type: 'text',
+            text: 'Ekstrak data bukti transfer ini sesuai skema. Balas HANYA objek JSON tunggal tanpa markdown.',
+          },
+        ];
+      } else if (pdfPayload.text && pdfPayload.text.trim().length > 10) {
+        userContent = [
+          {
+            type: 'text',
+            text: `Berikut adalah isi teks dari berkas PDF bukti transfer:\n\n${pdfPayload.text.slice(0, 3000)}\n\nEkstrak data bukti transfer ini sesuai skema. Balas HANYA objek JSON tunggal tanpa markdown.`,
+          },
+        ];
+      } else {
+        // PDF tanpa teks dan tanpa gambar (mis. scan tanpa OCR): masuk needs_manual secara aman
+        logger.info(
+          { ms: Date.now() - started },
+          'pdf_unreadable_fallback_needs_manual',
+        );
+        return null;
+      }
+    } else {
+      userContent = [
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:${file.mediaType};base64,${file.base64}`,
+          },
+        },
+        {
+          type: 'text',
+          text: 'Ekstrak data bukti transfer ini sesuai skema. Balas HANYA objek JSON tunggal tanpa markdown.',
+        },
+      ];
+    }
 
     try {
       res = await fetch(endpoint, {
@@ -259,13 +307,7 @@ export async function aiExtract(
             },
             {
               role: 'user',
-              content: [
-                imagePart,
-                {
-                  type: 'text',
-                  text: 'Ekstrak data bukti transfer ini sesuai skema. Balas HANYA objek JSON tunggal tanpa markdown.',
-                },
-              ],
+              content: userContent,
             },
           ],
         }),

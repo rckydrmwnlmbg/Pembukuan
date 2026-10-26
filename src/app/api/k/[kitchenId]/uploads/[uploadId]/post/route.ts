@@ -3,6 +3,7 @@ import { kitchenRoute } from '@/server/http/kitchen-route';
 import { PostUploadReviewBodySchema } from '@/lib/schemas/upload';
 import { UuidSchema } from '@/lib/schemas/common';
 import { defaultUploadStore } from '@/server/upload/service';
+import { postSupabaseReviewedUpload } from '@/server/ledger/supabase-ledger';
 
 const ParamsSchema = z.object({
   uploadId: UuidSchema,
@@ -11,9 +12,43 @@ const ParamsSchema = z.object({
 export const POST = kitchenRoute(
   ['admin', 'maker'],
   PostUploadReviewBodySchema,
-  async ({ kitchenId, params, user, input }) => {
+  async ({ kitchenId, params, user, input, supabase }) => {
     const { uploadId } = ParamsSchema.parse(params);
 
+    // 1. Simpan posting review ke database Supabase jika pengguna nyata
+    if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+      const result = await postSupabaseReviewedUpload(
+        supabase,
+        kitchenId,
+        uploadId,
+        user.id,
+        input,
+      );
+
+      return Response.json(
+        {
+          upload: result.upload,
+          createdTransactions: result.createdTransactions.map((r) => ({
+            ...r,
+            debit: r.debit.toString(),
+            credit: r.credit.toString(),
+            runningBalance: r.runningBalance.toString(),
+          })),
+          summary: {
+            openingBalance: result.summary.openingBalance.toString(),
+            totalIncoming: result.summary.totalIncoming.toString(),
+            totalOutgoing: result.summary.totalOutgoing.toString(),
+            closingBalance: result.summary.closingBalance.toString(),
+            incomingCount: result.summary.incomingCount,
+            outgoingCount: result.summary.outgoingCount,
+          },
+          savedRule: result.savedRule,
+        },
+        { status: 201 },
+      );
+    }
+
+    // 2. Fallback untuk sesi demo testing
     const result = defaultUploadStore.postReviewedUpload(
       kitchenId,
       uploadId,
