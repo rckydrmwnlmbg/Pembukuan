@@ -1,6 +1,6 @@
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { createClient } from '@/server/supabase/server';
 import { getEnv } from '@/server/env';
 
@@ -99,10 +99,21 @@ export async function signUpAction(formData: {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
+    const headerList = await headers();
+    const host = headerList.get('x-forwarded-host') || headerList.get('host');
+    const proto = headerList.get('x-forwarded-proto') || 'https';
+    const origin = host ? `${proto}://${host}` : undefined;
+
+    const options: { emailRedirectTo?: string } = {};
+    if (origin) {
+      options.emailRedirectTo = `${origin}/auth/callback`;
+    }
+
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
+      options,
     });
 
     if (error) {
