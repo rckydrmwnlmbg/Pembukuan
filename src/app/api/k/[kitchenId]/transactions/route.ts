@@ -4,6 +4,10 @@ import {
   LedgerQuerySchema,
 } from '@/lib/schemas/transaction';
 import { defaultLedgerStore } from '@/server/ledger/service';
+import {
+  createTransaction as createSupabaseTransaction,
+  getKitchenLedger as getSupabaseKitchenLedger,
+} from '@/server/ledger/supabase-ledger';
 
 function serializeRow(
   row: {
@@ -42,7 +46,50 @@ function serializeRow(
 export const GET = kitchenRoute(
   ['admin', 'maker', 'approver', 'viewer'],
   LedgerQuerySchema,
-  async ({ kitchenId, input }) => {
+  async ({ supabase, user, kitchenId, input }) => {
+    // 1. Coba ambil dari Supabase jika pengguna nyata
+    if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+      try {
+        const ledger = await getSupabaseKitchenLedger(
+          supabase,
+          kitchenId,
+          input.periodId,
+        );
+
+        let filtered = ledger.rows;
+        if (input.status && input.status !== 'all') {
+          filtered = filtered.filter((r) => r.status === input.status);
+        }
+        if (input.q && input.q.trim()) {
+          const qLower = input.q.trim().toLowerCase();
+          filtered = filtered.filter(
+            (r) =>
+              r.description.toLowerCase().includes(qLower) ||
+              (r.referenceNo && r.referenceNo.toLowerCase().includes(qLower)) ||
+              (r.counterpartyName && r.counterpartyName.toLowerCase().includes(qLower)),
+          );
+        }
+
+        return Response.json({
+          kitchenId,
+          periodId: ledger.kitchen.periodId,
+          periodStatus: ledger.kitchen.periodStatus,
+          summary: {
+            openingBalance: ledger.summary.openingBalance.toString(),
+            totalIncoming: ledger.summary.totalIncoming.toString(),
+            totalOutgoing: ledger.summary.totalOutgoing.toString(),
+            closingBalance: ledger.summary.closingBalance.toString(),
+            incomingCount: ledger.summary.incomingCount,
+            outgoingCount: ledger.summary.outgoingCount,
+          },
+          rows: filtered.map((row, idx) => serializeRow(row, idx + 1)),
+        });
+      } catch {
+        // Fallback ke store in-memory jika belum diinisialisasi
+      }
+    }
+
+    // 2. Fallback untuk unit test / in-memory store
     const result = defaultLedgerStore.getKitchenLedger(kitchenId, {
       periodId: input.periodId,
       q: input.q,
@@ -69,7 +116,40 @@ export const GET = kitchenRoute(
 export const POST = kitchenRoute(
   ['admin', 'maker'],
   CreateTransactionBodySchema,
-  async ({ kitchenId, user, input }) => {
+  async ({ supabase, user, kitchenId, input }) => {
+    // 1. Simpan ke database Supabase jika pengguna nyata
+    if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+      try {
+        const realResult = await createSupabaseTransaction(
+          supabase,
+          user.id,
+          kitchenId,
+          input,
+        );
+
+        return Response.json(
+          {
+            created: realResult.created.map((row, idx) => serializeRow(row, idx + 1)),
+            summary: {
+              openingBalance: realResult.summary.openingBalance.toString(),
+              totalIncoming: realResult.summary.totalIncoming.toString(),
+              totalOutgoing: realResult.summary.totalOutgoing.toString(),
+              closingBalance: realResult.summary.closingBalance.toString(),
+              incomingCount: realResult.summary.incomingCount,
+              outgoingCount: realResult.summary.outgoingCount,
+            },
+          },
+          { status: 201 },
+        );
+      } catch (err: unknown) {
+        // Jika galat validasi bisnis/database Supabase, lemparkan galat langsung
+        if (err instanceof Error && !err.message.includes('fetch failed')) {
+          throw err;
+        }
+      }
+    }
+
+    // 2. Fallback untuk store in-memory / testing
     const result = defaultLedgerStore.createTransaction(
       kitchenId,
       user.id,

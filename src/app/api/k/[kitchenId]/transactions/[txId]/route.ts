@@ -6,6 +6,7 @@ import {
 } from '@/lib/schemas/transaction';
 import { UuidSchema } from '@/lib/schemas/common';
 import { defaultLedgerStore } from '@/server/ledger/service';
+import { voidTransaction as voidSupabaseTransaction, getKitchenLedger as getSupabaseKitchenLedger } from '@/server/ledger/supabase-ledger';
 import { HttpError } from '@/server/http/errors';
 
 const EmptyGetQuerySchema = z.object({}).strict();
@@ -36,8 +37,29 @@ const PatchTransactionBodySchema = z
 export const GET = kitchenRoute(
   ['admin', 'maker', 'approver', 'viewer'],
   EmptyGetQuerySchema,
-  async ({ kitchenId, params }) => {
+  async ({ supabase, user, kitchenId, params }) => {
     const { txId } = ParamsSchema.parse(params);
+
+    // 1. Coba ambil dari Supabase jika terhubung
+    if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+      try {
+        const ledger = await getSupabaseKitchenLedger(supabase, kitchenId);
+        const row = ledger.rows.find((r) => r.id === txId);
+        if (row) {
+          return Response.json({
+            ...row,
+            debit: row.debit.toString(),
+            credit: row.credit.toString(),
+            runningBalance: row.runningBalance.toString(),
+            version: row.version ?? 1,
+          });
+        }
+      } catch {
+        // Fallback ke in-memory
+      }
+    }
+
+    // 2. Fallback in-memory
     const ledger = defaultLedgerStore.getKitchenLedger(kitchenId);
     const row = ledger.rows.find((r) => r.id === txId);
     if (!row) {
@@ -57,7 +79,7 @@ export const GET = kitchenRoute(
 export const PATCH = kitchenRoute(
   ['admin', 'maker'],
   PatchTransactionBodySchema,
-  async ({ kitchenId, params, user, input }) => {
+  async ({ supabase, user, kitchenId, params, input }) => {
     const { txId } = ParamsSchema.parse(params);
 
     if (input.action === 'void') {
@@ -66,6 +88,38 @@ export const PATCH = kitchenRoute(
         version: input.version,
         reason: input.reason,
       });
+
+      // 1. Batalkan di Supabase jika terhubung
+      if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+        try {
+          const { voidedIds } = await voidSupabaseTransaction(
+            supabase,
+            user.id,
+            kitchenId,
+            txId,
+            input.reason || '',
+          );
+          const ledger = await getSupabaseKitchenLedger(supabase, kitchenId);
+
+          return Response.json({
+            voidedIds,
+            summary: {
+              openingBalance: ledger.summary.openingBalance.toString(),
+              totalIncoming: ledger.summary.totalIncoming.toString(),
+              totalOutgoing: ledger.summary.totalOutgoing.toString(),
+              closingBalance: ledger.summary.closingBalance.toString(),
+              incomingCount: ledger.summary.incomingCount,
+              outgoingCount: ledger.summary.outgoingCount,
+            },
+          });
+        } catch (err: unknown) {
+          if (err instanceof Error && !err.message.includes('fetch failed')) {
+            throw err;
+          }
+        }
+      }
+
+      // 2. Fallback in-memory
       const result = defaultLedgerStore.voidTransaction(
         kitchenId,
         txId,

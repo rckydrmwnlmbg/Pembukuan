@@ -2,10 +2,11 @@
 
 import { cookies } from 'next/headers';
 import { createClient } from '@/server/supabase/server';
+import { getEnv } from '@/server/env';
 
 /**
  * Server action untuk proses login:
- * Mendukung kredensial pengguna nyata Supabase Auth maupun kredensial demo sintetis.
+ * Otentikasi langsung dengan Supabase Auth pengguna nyata.
  */
 export async function signInAction(formData: {
   email: string;
@@ -24,15 +25,18 @@ export async function signInAction(formData: {
 
   const cleanEmail = email.trim().toLowerCase();
 
-  // 1. Kredensial akun demo sintetis
-  if (cleanEmail === 'maker@sintetis.example' && password === 'demo1234') {
+  // 1. Akun demo khusus testing lokal (hanya aktif jika NEXT_PUBLIC_DEMO=true dan APP_ENV !== 'production')
+  const env = getEnv();
+  const allowDemo = env.NEXT_PUBLIC_DEMO === 'true' && env.APP_ENV !== 'production';
+
+  if (allowDemo && cleanEmail === 'maker@sintetis.example' && password === 'demo1234') {
     const cookieStore = await cookies();
     cookieStore.set('kasdapur_session', 'authenticated', {
       path: '/',
       httpOnly: false,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 12, // 12 jam
+      secure: false,
+      maxAge: 60 * 60 * 12,
     });
     return { needMfa: true, isDemo: true };
   }
@@ -56,7 +60,7 @@ export async function signInAction(formData: {
     // Periksa tingkat jaminan autentikasi (MFA)
     const { data: aal } =
       await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aal?.nextLevel === 'aal2') {
+    if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
       return { needMfa: true, isDemo: false };
     }
 
@@ -67,6 +71,58 @@ export async function signInAction(formData: {
         err instanceof Error
           ? err.message
           : 'Gagal menghubungi server Supabase. Pastikan NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY telah diatur di Vercel.',
+    };
+  }
+}
+
+/**
+ * Server action untuk pendaftaran akun pengguna baru di Supabase Auth.
+ */
+export async function signUpAction(formData: {
+  email: string;
+  password: string;
+}): Promise<{
+  success?: boolean;
+  error?: string;
+  message?: string;
+}> {
+  const { email, password } = formData;
+
+  if (!email || !password) {
+    return { error: 'Email dan kata sandi wajib diisi.' };
+  }
+
+  if (password.length < 6) {
+    return { error: 'Kata sandi minimal 6 karakter.' };
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password,
+    });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    if (data.session) {
+      return { success: true, message: 'Pendaftaran berhasil dan Anda telah masuk!' };
+    }
+
+    return {
+      success: true,
+      message: 'Pendaftaran berhasil! Silakan masuk menggunakan akun baru Anda.',
+    };
+  } catch (err: unknown) {
+    return {
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Gagal menghubungi server Supabase saat mendaftarkan akun.',
     };
   }
 }
@@ -128,31 +184,30 @@ export async function verifyMfaAction(code: string): Promise<{
 }
 
 /**
- * Server action untuk mengaktifkan sesi login demo di lingkungan browser.
+ * Server action untuk menghapus sesi dan logout (SECURITY.md S-11).
  */
-export async function setDemoSessionAction(): Promise<{ ok: boolean }> {
+export async function clearSessionAction(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete('kasdapur_session');
+
+  try {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+  } catch {
+    // Abaikan jika klien gagal
+  }
+}
+
+/**
+ * Helper untuk testing unit mode demo.
+ */
+export async function setDemoSessionAction(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set('kasdapur_session', 'authenticated', {
     path: '/',
     httpOnly: false,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     maxAge: 60 * 60 * 12,
   });
-  return { ok: true };
-}
-
-/**
- * Server action untuk menghapus sesi dan keluar (logout).
- */
-export async function clearSessionAction(): Promise<{ ok: boolean }> {
-  const cookieStore = await cookies();
-  cookieStore.delete('kasdapur_session');
-  try {
-    const supabase = await createClient();
-    await supabase.auth.signOut();
-  } catch {
-    // Abaikan jika Supabase tidak terhubung
-  }
-  return { ok: true };
 }

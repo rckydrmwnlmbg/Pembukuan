@@ -1,8 +1,10 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
 import { formatPeriodLabel } from '@/lib/format';
+import { requireUser } from '@/server/auth/require-user';
 import { defaultLedgerStore } from '@/server/ledger/service';
 import { defaultUploadStore } from '@/server/upload/service';
+import { getKitchenLedger as getSupabaseKitchenLedger } from '@/server/ledger/supabase-ledger';
 import {
   LedgerWorkspace,
   type SerializedKitchenInfo,
@@ -10,18 +12,34 @@ import {
   type SerializedPeriodSummary,
 } from '@/components/domain/LedgerWorkspace';
 
+export const dynamic = 'force-dynamic';
+
 interface LedgerPageProps {
   params: Promise<{ kitchenId: string }>;
 }
 
 export default async function KitchenLedgerPage({ params }: LedgerPageProps) {
   const { kitchenId } = await params;
+  const { user, supabase } = await requireUser();
 
   let ledgerData;
-  try {
-    ledgerData = defaultLedgerStore.getKitchenLedger(kitchenId);
-  } catch {
-    notFound();
+
+  // 1. Ambil dari database Supabase nyata
+  if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+    try {
+      ledgerData = await getSupabaseKitchenLedger(supabase, kitchenId);
+    } catch {
+      // Abaikan jika belum ada di database nyata
+    }
+  }
+
+  // 2. Fallback in-memory jika mode demo/test
+  if (!ledgerData) {
+    try {
+      ledgerData = defaultLedgerStore.getKitchenLedger(kitchenId);
+    } catch {
+      notFound();
+    }
   }
 
   const periodLabel = formatPeriodLabel(
