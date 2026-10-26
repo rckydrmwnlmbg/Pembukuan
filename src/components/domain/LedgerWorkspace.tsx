@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
+import { UploadCloud, FileSpreadsheet } from 'lucide-react';
 import {
   formatTxDate,
   formatLedgerCellAmount,
@@ -60,6 +62,7 @@ export interface LedgerWorkspaceProps {
   kitchen: SerializedKitchenInfo;
   initialRows: readonly SerializedLedgerRow[];
   initialSummary: SerializedPeriodSummary;
+  reviewQueueCount?: number;
 }
 
 type PanelMode =
@@ -104,6 +107,7 @@ export function LedgerWorkspace({
   kitchen,
   initialRows,
   initialSummary,
+  reviewQueueCount = 0,
 }: LedgerWorkspaceProps) {
   const [rows, setRows] = useState< readonly SerializedLedgerRow[]>(initialRows);
   const [summary, setSummary] =
@@ -385,10 +389,10 @@ export function LedgerWorkspace({
   return (
     <div className="space-y-4">
       {/* Header Konteks Dapur Aktif */}
-      <div className="flex flex-col gap-3 rounded-lg border border-line-subtle bg-surface p-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight text-ink-primary">
+      <div className="flex flex-col gap-4 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-2xs lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--ink)]">
               {kitchen.name}
             </h1>
             <Badge tone="neutral">{kitchen.code}</Badge>
@@ -396,17 +400,37 @@ export function LedgerWorkspace({
               {isLocked ? 'Periode Terkunci' : 'Periode Terbuka'}
             </Badge>
           </div>
-          <p className="mt-1 text-xs text-ink-secondary">
-            Buku kas {kitchen.periodLabel}. Penanggung jawab: <span className="font-medium text-ink-primary">{kitchen.pjName}</span>, Rekening {kitchen.bankName} {kitchen.accountNumberMasked}, Biaya admin bawaan{' '}
-            <span className="font-medium tabular-nums">
+          <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
+            Buku kas {kitchen.periodLabel} &bull; PJ: <span className="font-semibold text-[var(--ink)]">{kitchen.pjName}</span> &bull; Rekening {kitchen.bankName} {kitchen.accountNumberMasked} &bull; Biaya admin{' '}
+            <span className="font-semibold tabular-nums text-[var(--ink)]">
               {formatRupiah(BigInt(kitchen.adminFeeDefault))}
             </span>
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/k/${kitchen.id}/review`}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--accent)] px-3.5 text-xs font-semibold text-white shadow-2xs hover:bg-[var(--accent-hover)] transition-colors"
+          >
+            <UploadCloud className="h-4 w-4" />
+            <span>Unggah Bukti</span>
+            {reviewQueueCount > 0 && (
+              <span className="ml-1 rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">
+                {reviewQueueCount}
+              </span>
+            )}
+          </Link>
+          <a
+            href={`/api/k/${kitchen.id}/export/xlsx?periodId=${kitchen.periodId}`}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--ok)]" />
+            <span>Unduh Excel (.xlsx)</span>
+          </a>
           <Button
             variant="secondary"
+            size="sm"
             disabled={isLocked}
             onClick={() => openCreatePanel('incoming')}
           >
@@ -414,17 +438,12 @@ export function LedgerWorkspace({
           </Button>
           <Button
             variant="secondary"
+            size="sm"
             disabled={isLocked}
             onClick={() => openCreatePanel('outgoing')}
           >
             + Transaksi Manual
           </Button>
-          <a
-            href={`/api/k/${kitchen.id}/export/xlsx?periodId=${kitchen.periodId}`}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-line-strong bg-surface px-3.5 text-sm font-medium text-ink-primary transition-colors hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            Ekspor Excel (.xlsx)
-          </a>
         </div>
       </div>
 

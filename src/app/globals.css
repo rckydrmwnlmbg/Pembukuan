@@ -5,17 +5,22 @@
   --canvas: #F4F6F8;
   --surface: #FFFFFF;
   --surface-muted: #F8FAFB;
+  --surface-subtle: #F1F4F7;
   --line: #DDE2E8;
+  --line-subtle: #E5E9EE;
   --line-strong: #C3CBD4;
 
   /* Teks (DESIGN.md 3.1) */
   --ink: #1B2430;
+  --ink-primary: #1B2430;
+  --ink-secondary: #566272;
   --ink-muted: #566272;
   --ink-subtle: #7A8695;
   --ink-on-accent: #FFFFFF;
 
   /* Aksen tunggal Petrol (DESIGN.md 3.1) */
   --accent: #0B4F6C;
+  --accent-primary: #0B4F6C;
   --accent-hover: #093F57;
   --accent-press: #07324A;
   --accent-subtle: #E7F0F4;
@@ -45,15 +50,20 @@
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-subtle: var(--surface-subtle);
   --color-line: var(--line);
+  --color-line-subtle: var(--line-subtle);
   --color-line-strong: var(--line-strong);
 
   --color-ink: var(--ink);
+  --color-ink-primary: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
   --color-ink-muted: var(--ink-muted);
   --color-ink-subtle: var(--ink-subtle);
   --color-ink-on-accent: var(--ink-on-accent);
 
   --color-accent: var(--accent);
+  --color-accent-primary: var(--accent-primary);
   --color-accent-hover: var(--accent-hover);
   --color-accent-press: var(--accent-press);
   --color-accent-subtle: var(--accent-subtle);

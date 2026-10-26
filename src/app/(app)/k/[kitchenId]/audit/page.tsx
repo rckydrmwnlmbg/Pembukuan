@@ -28,22 +28,22 @@ function getActionBadge(action: string) {
     case 'periods.lock':
       return {
         label: 'Kunci Periode',
-        className: 'bg-[var(--neutral-subtle)] text-[var(--ink-base)] border-[var(--line)]',
+        className: 'bg-[var(--surface-muted)] text-[var(--ink)] border-[var(--line)]',
       };
     case 'periods.reopen':
       return {
         label: 'Buka Periode',
-        className: 'bg-[var(--warning-subtle)] text-[var(--warning-text,inherit)] border-[var(--warning)]',
+        className: 'bg-[var(--warn-subtle)] text-[var(--warn)] border-[var(--warn)]',
       };
     case 'periods.insert':
       return {
         label: 'Periode Baru',
-        className: 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[var(--line)]',
+        className: 'bg-[var(--accent-subtle)] text-[var(--accent)] border-[var(--accent-line)]',
       };
     case 'kitchens.update':
       return {
         label: 'Ubah Pengaturan',
-        className: 'bg-[var(--neutral-subtle)] text-[var(--ink-base)] border-[var(--line)]',
+        className: 'bg-[var(--surface-muted)] text-[var(--ink)] border-[var(--line)]',
       };
     case 'transactions.void':
       return {
@@ -58,7 +58,7 @@ function getActionBadge(action: string) {
     case 'transactions.update':
       return {
         label: 'Ubah Transaksi',
-        className: 'bg-[var(--surface)] text-[var(--ink-base)] border-[var(--line)]',
+        className: 'bg-[var(--surface)] text-[var(--ink)] border-[var(--line)]',
       };
     default:
       return {

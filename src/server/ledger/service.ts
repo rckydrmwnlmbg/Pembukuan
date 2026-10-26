@@ -115,6 +115,99 @@ export class LedgerServiceStore {
     return result;
   }
 
+  public createKitchen(
+    actorId: string,
+    input: {
+      name: string;
+      code: string;
+      pjName: string;
+      bankCode: string;
+      accountNoLast4: string;
+      openingBalance: bigint;
+      adminFeeDefault?: bigint;
+      year?: number;
+      month?: number;
+    },
+  ): Omit<DemoKitchen, 'entries'> & { summary: PeriodBalanceSummary } {
+    const kitchenId = crypto.randomUUID();
+    const periodId = crypto.randomUUID();
+    const year = input.year ?? 2026;
+    const month = input.month ?? 3;
+    const openingBalance = input.openingBalance;
+    const adminFeeDefault = input.adminFeeDefault ?? 6_500n;
+
+    const normalizedCode = input.code.trim().toUpperCase();
+    for (const st of this.states.values()) {
+      if (st.kitchen.code.toUpperCase() === normalizedCode) {
+        throw new HttpError(409, `Kode dapur ${normalizedCode} sudah digunakan.`);
+      }
+    }
+
+    const newKitchen: Omit<DemoKitchen, 'entries' | 'summary'> = {
+      id: kitchenId,
+      organizationId: '00000000-0000-4000-8000-000000000001',
+      code: normalizedCode,
+      name: input.name.trim(),
+      pjName: input.pjName.trim(),
+      bankCode: input.bankCode.trim().toUpperCase(),
+      accountNo: input.accountNoLast4.trim(),
+      accountNoLast4: input.accountNoLast4.trim().slice(-4),
+      openingBalance,
+      adminFeeDefault,
+      highAmountThreshold: 50_000_000n,
+      periodId,
+      year,
+      month,
+      periodStatus: 'open',
+      nextPeriodOpeningBalance: null,
+      pendingDraftCount: 0,
+      needsManualCount: 0,
+      lastUploadDate: '-',
+    };
+
+    const newState: KitchenLedgerState = {
+      kitchen: newKitchen,
+      entries: [],
+      auditLogs: [
+        {
+          id: crypto.randomUUID(),
+          kitchenId,
+          actorId,
+          action: 'kitchens.update',
+          entity: 'kitchens',
+          entityId: kitchenId,
+          before: null,
+          after: {
+            id: kitchenId,
+            name: newKitchen.name,
+            code: newKitchen.code,
+          },
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+
+    this.states.set(kitchenId, newState);
+
+    const { summary } = computePeriodLedger(openingBalance, []);
+    return {
+      ...newKitchen,
+      summary,
+    };
+  }
+
+  public clearDemoKitchens(): void {
+    const idsToRemove: string[] = [];
+    for (const [id, st] of this.states.entries()) {
+      if (st.kitchen.code.startsWith('DS-') || id.startsWith('10000000-0000-4000-8000-')) {
+        idsToRemove.push(id);
+      }
+    }
+    for (const id of idsToRemove) {
+      this.states.delete(id);
+    }
+  }
+
   public getKitchen(
     kitchenId: string,
   ): Omit<DemoKitchen, 'entries'> & { summary: PeriodBalanceSummary } {

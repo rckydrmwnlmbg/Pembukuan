@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -9,10 +9,13 @@ import {
   Unlock,
   AlertCircle,
   Settings,
+  Plus,
+  BookOpen,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/format';
 import type { DemoKitchen } from '@/lib/demo-data';
 import type { PeriodBalanceSummary } from '@/lib/ledger-math';
+import { AddKitchenModal } from '@/components/domain/AddKitchenModal';
 
 export interface DashboardKitchenItem extends Omit<DemoKitchen, 'entries'> {
   summary: PeriodBalanceSummary;
@@ -37,6 +40,11 @@ export function DashboardSummary({
   selectedPeriodLabel = 'Maret 2026',
 }: DashboardSummaryProps) {
   const router = useRouter();
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  const hasDemo = kitchens.some(
+    (k) => k.code.startsWith('DS-') || k.id.startsWith('10000000-0000-4000-8000-'),
+  );
 
   // Kumpulkan item "Perlu tindakan" (DESIGN.md 8.2)
   const actionItems: Array<{
@@ -90,29 +98,39 @@ export function DashboardSummary({
       {/* Header Halaman (DESIGN.md 8.2) */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line)] pb-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-[var(--ink-base)]">
-            Ringkasan
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--ink)]">
+            Ringkasan Dapur
           </h1>
           <p className="mt-1 text-xs text-[var(--ink-muted)]">
-            Saldo tiap dapur dihitung terpisah.
+            Setiap dapur memiliki buku kas dan saldo terpisah.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Pemilih Periode */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] text-xs text-[var(--ink-base)]">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-xs text-[var(--ink)] shadow-2xs">
             <span className="text-[var(--ink-muted)]">Periode:</span>
-            <span className="font-medium">{selectedPeriodLabel}</span>
+            <span className="font-semibold">{selectedPeriodLabel}</span>
           </div>
+
+          {/* Tombol Tambah Dapur */}
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors shadow-2xs"
+          >
+            <Plus className="w-3.5 h-3.5 text-[var(--accent)]" />
+            Tambah Dapur
+          </button>
 
           {/* Tombol Unggah */}
           {kitchens[0] && (
             <Link
               href={`/k/${kitchens[0].id}/review`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-[var(--accent)] text-xs font-semibold text-[var(--ink-on-accent,#fff)] hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[var(--accent)] text-xs font-semibold text-[var(--ink-on-accent,#fff)] hover:bg-[var(--accent-hover)] transition-colors shadow-2xs"
             >
               <Upload className="w-3.5 h-3.5" />
-              Unggah bukti transfer
+              Unggah Bukti Transfer
             </Link>
           )}
         </div>
@@ -121,15 +139,15 @@ export function DashboardSummary({
       {/* Panel "Perlu tindakan" (DESIGN.md 8.2) */}
       <section
         aria-labelledby="perlu-tindakan-heading"
-        className="rounded-lg border border-[var(--line)] bg-[var(--surface)] overflow-hidden"
+        className="rounded-xl border border-[var(--line)] bg-[var(--surface)] overflow-hidden shadow-2xs"
       >
-        <div className="px-4 py-2.5 bg-[var(--surface-muted)] border-b border-[var(--line)] flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-[var(--warning)] shrink-0" />
+        <div className="px-4 py-3 bg-[var(--surface-muted)] border-b border-[var(--line)] flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-[var(--warn)] shrink-0" />
           <h2
             id="perlu-tindakan-heading"
-            className="text-xs font-semibold text-[var(--ink-base)]"
+            className="text-xs font-semibold text-[var(--ink)]"
           >
-            Perlu tindakan
+            Perlu Tindakan
           </h2>
         </div>
 
@@ -142,17 +160,17 @@ export function DashboardSummary({
             {actionItems.map((item) => (
               <li
                 key={item.id}
-                className="px-4 py-3 flex items-center justify-between gap-4 text-xs hover:bg-[var(--neutral-subtle)] transition-colors"
+                className="px-4 py-3 flex items-center justify-between gap-4 text-xs hover:bg-[var(--surface-muted)] transition-colors"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 min-w-0">
-                  <span className="font-semibold text-[var(--ink-base)] w-44 shrink-0 truncate">
+                  <span className="font-semibold text-[var(--ink)] w-48 shrink-0 truncate">
                     {item.kitchenName}
                   </span>
                   <span className="text-[var(--ink-muted)]">{item.label}</span>
                 </div>
                 <Link
                   href={item.actionUrl}
-                  className="inline-flex items-center px-3 py-1 rounded border border-[var(--line)] bg-[var(--surface)] font-medium text-xs text-[var(--accent)] hover:underline shrink-0"
+                  className="inline-flex items-center px-3 py-1 rounded-md border border-[var(--line)] bg-[var(--surface)] font-semibold text-xs text-[var(--accent)] hover:bg-[var(--accent-subtle)] shrink-0 transition-colors"
                 >
                   <span>{item.actionLabel}</span>
                 </Link>
@@ -165,139 +183,163 @@ export function DashboardSummary({
       {/* Tabel "Dapur" (DESIGN.md 8.2) */}
       <section
         aria-labelledby="dapur-table-heading"
-        className="rounded-lg border border-[var(--line)] bg-[var(--surface)] overflow-hidden"
+        className="rounded-xl border border-[var(--line)] bg-[var(--surface)] overflow-hidden shadow-2xs"
       >
-        <div className="px-4 py-2.5 bg-[var(--surface-muted)] border-b border-[var(--line)] flex items-center justify-between">
+        <div className="px-4 py-3 bg-[var(--surface-muted)] border-b border-[var(--line)] flex items-center justify-between">
           <h2
             id="dapur-table-heading"
-            className="text-xs font-semibold text-[var(--ink-base)]"
+            className="text-xs font-semibold text-[var(--ink)]"
           >
-            Dapur
+            Daftar Dapur ({kitchens.length})
           </h2>
           <span className="text-[11px] text-[var(--ink-muted)]">
-            Klik baris untuk membuka buku kas
+            Klik baris untuk membuka Buku Kas
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-[var(--line)] text-[var(--ink-muted)] bg-[var(--surface)]">
-                <th className="py-2.5 px-4 font-medium">Dapur</th>
-                <th className="py-2.5 px-4 font-medium text-right">Saldo akhir</th>
-                <th className="py-2.5 px-4 font-medium text-center">Menunggu review</th>
-                <th className="py-2.5 px-4 font-medium">Terakhir diunggah</th>
-                <th className="py-2.5 px-4 font-medium">Periode</th>
-                <th className="py-2.5 px-4 font-medium text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--line)]">
-              {kitchens.map((k) => {
-                const isLocked = k.periodStatus === 'locked';
-                const totalPending = k.pendingDraftCount + k.needsManualCount;
+        {kitchens.length === 0 ? (
+          <div className="p-8 text-center space-y-3">
+            <p className="text-xs text-[var(--ink-muted)]">
+              Belum ada dapur yang terdaftar. Buat dapur pertama Anda untuk mulai mencatat buku kas.
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--accent)] text-xs font-semibold text-white hover:bg-[var(--accent-hover)] transition-colors shadow-2xs"
+            >
+              <Plus className="w-4 h-4" />
+              Tambah Dapur Pertama
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--line)] text-[var(--ink-muted)] bg-[var(--surface)] font-medium">
+                  <th className="py-2.5 px-4">Dapur</th>
+                  <th className="py-2.5 px-4 text-right">Saldo Akhir</th>
+                  <th className="py-2.5 px-4 text-center">Menunggu Review</th>
+                  <th className="py-2.5 px-4">Terakhir Diunggah</th>
+                  <th className="py-2.5 px-4">Status Periode</th>
+                  <th className="py-2.5 px-4 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--line)]">
+                {kitchens.map((k) => {
+                  const isLocked = k.periodStatus === 'locked';
+                  const totalPending = k.pendingDraftCount + k.needsManualCount;
 
-                return (
-                  <tr
-                    key={k.id}
-                    tabIndex={0}
-                    role="button"
-                    onClick={() => router.push(`/k/${k.id}/ledger`)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        router.push(`/k/${k.id}/ledger`);
-                      }
-                    }}
-                    className="hover:bg-[var(--surface-muted)] cursor-pointer transition-colors focus:outline-none focus:bg-[var(--surface-muted)]"
-                  >
-                    {/* Dapur */}
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-[var(--ink-base)]">
-                        {k.name}
-                      </div>
-                      <div className="text-[11px] text-[var(--ink-subtle)]">
-                        {k.code} ({k.pjName})
-                      </div>
-                    </td>
+                  return (
+                    <tr
+                      key={k.id}
+                      tabIndex={0}
+                      role="button"
+                      onClick={() => router.push(`/k/${k.id}/ledger`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          router.push(`/k/${k.id}/ledger`);
+                        }
+                      }}
+                      className="hover:bg-[var(--surface-muted)] cursor-pointer transition-colors focus:outline-none focus:bg-[var(--surface-muted)]"
+                    >
+                      {/* Dapur */}
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-[var(--ink)]">
+                          {k.name}
+                        </div>
+                        <div className="text-[11px] text-[var(--ink-muted)]">
+                          {k.code} &bull; PJ: {k.pjName} &bull; Rekening {k.bankCode} ****{k.accountNoLast4}
+                        </div>
+                      </td>
 
-                    {/* Saldo Akhir */}
-                    <td className="py-3 px-4 text-right tabular-nums font-semibold text-[var(--ink-base)]">
-                      {formatRupiah(k.summary.closingBalance)}
-                    </td>
+                      {/* Saldo Akhir */}
+                      <td className="py-3.5 px-4 text-right tabular-nums font-bold text-sm text-[var(--ink)]">
+                        {formatRupiah(k.summary.closingBalance)}
+                      </td>
 
-                    {/* Menunggu Review */}
-                    <td className="py-3 px-4 text-center">
-                      {totalPending > 0 ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-[var(--warning-subtle)] text-[var(--warning-text,inherit)] border border-[var(--warning)]">
-                          {totalPending}
-                        </span>
-                      ) : (
-                        <span className="text-[var(--ink-subtle)]">0</span>
-                      )}
-                    </td>
-
-                    {/* Terakhir Diunggah */}
-                    <td className="py-3 px-4 text-[var(--ink-muted)]">
-                      {k.lastUploadDate}
-                    </td>
-
-                    {/* Periode Status Badge */}
-                    <td className="py-3 px-4">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border ${
-                          isLocked
-                            ? 'bg-[var(--neutral-subtle)] text-[var(--ink-muted)] border-[var(--line)]'
-                            : 'bg-[var(--surface)] text-[var(--ink-base)] border-[var(--line)]'
-                        }`}
-                      >
-                        {isLocked ? (
-                          <>
-                            <Lock className="w-3 h-3" />
-                            <span>Terkunci</span>
-                          </>
+                      {/* Menunggu Review */}
+                      <td className="py-3.5 px-4 text-center">
+                        {totalPending > 0 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-[var(--warn-subtle)] text-[var(--warn)] border border-[var(--warn)]">
+                            {totalPending} draf
+                          </span>
                         ) : (
-                          <>
-                            <Unlock className="w-3 h-3 text-[var(--ink-subtle)]" />
-                            <span>Terbuka</span>
-                          </>
+                          <span className="text-[var(--ink-subtle)]">0</span>
                         )}
-                      </span>
-                    </td>
+                      </td>
 
-                    {/* Aksi */}
-                    <td className="py-3 px-4 text-right">
-                      <div
-                        className="inline-flex items-center gap-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Link
-                          href={`/k/${k.id}/settings`}
-                          title="Pengaturan Dapur"
-                          className="p-1 rounded text-[var(--ink-muted)] hover:text-[var(--ink-base)] hover:bg-[var(--neutral-subtle)]"
-                        >
-                          <Settings className="w-4 h-4" />
-                        </Link>
-                        <Link
-                          href={`/k/${k.id}/ledger`}
-                          className="px-2.5 py-1 rounded bg-[var(--surface)] border border-[var(--line)] text-xs font-medium text-[var(--ink-base)] hover:bg-[var(--neutral-subtle)]"
-                        >
-                          Buka
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      {/* Terakhir Diunggah */}
+                      <td className="py-3.5 px-4 text-[var(--ink-muted)]">
+                        {k.lastUploadDate}
+                      </td>
 
-        <div className="p-3 bg-[var(--neutral-subtle)] text-[11px] text-[var(--ink-muted)] border-t border-[var(--line)] flex items-center justify-between">
+                      {/* Periode Status Badge */}
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-semibold border ${
+                            isLocked
+                              ? 'bg-[var(--surface-muted)] text-[var(--ink-muted)] border-[var(--line)]'
+                              : 'bg-[var(--ok-subtle)] text-[var(--ok)] border-[var(--ok)]'
+                          }`}
+                        >
+                          {isLocked ? (
+                            <>
+                              <Lock className="w-3 h-3" />
+                              <span>Terkunci</span>
+                            </>
+                          ) : (
+                            <>
+                              <Unlock className="w-3 h-3" />
+                              <span>Terbuka</span>
+                            </>
+                          )}
+                        </span>
+                      </td>
+
+                      {/* Aksi */}
+                      <td className="py-3.5 px-4 text-right">
+                        <div
+                          className="inline-flex items-center gap-1.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Link
+                            href={`/k/${k.id}/settings`}
+                            title="Pengaturan Dapur"
+                            className="p-1.5 rounded-md text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[var(--line)] transition-colors"
+                          >
+                            <Settings className="w-4 h-4" />
+                          </Link>
+                          <Link
+                            href={`/k/${k.id}/ledger`}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-[var(--surface)] border border-[var(--line-strong)] text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors"
+                          >
+                            <BookOpen className="w-3.5 h-3.5 text-[var(--accent)]" />
+                            <span>Buka Buku Kas</span>
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="p-3 bg-[var(--surface-muted)] text-[11px] text-[var(--ink-muted)] border-t border-[var(--line)] flex items-center justify-between">
           <span>
-            Aturan Emas #1: Tidak ada baris total lintas dapur. Saldo setiap dapur berdiri sendiri.
+            Buku kas dan saldo terisolasi per dapur (tidak ada penjumlahan saldo lintas dapur).
           </span>
-          <span>5 Dapur Terisolasi</span>
+          <span className="font-medium">{kitchens.length} Dapur Terdaftar</span>
         </div>
       </section>
+
+      {/* Modal Tambah Dapur */}
+      <AddKitchenModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        hasDemoData={hasDemo}
+      />
     </div>
   );
 }

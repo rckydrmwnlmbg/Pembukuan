@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 import { formatPeriodLabel } from '@/lib/format';
 import { defaultLedgerStore } from '@/server/ledger/service';
 import { defaultUploadStore } from '@/server/upload/service';
-import { DapurSwitcher } from '@/components/domain/DapurSwitcher';
 import { ReviewWorkspace } from '@/components/domain/ReviewWorkspace';
 
 interface ReviewPageProps {
@@ -12,15 +11,6 @@ interface ReviewPageProps {
 
 export default async function KitchenReviewPage({ params }: ReviewPageProps) {
   const { kitchenId } = await params;
-
-  const allKitchens = defaultLedgerStore.listKitchenMeta();
-  const switcherOptions = allKitchens.map((k) => ({
-    id: k.id,
-    code: k.code,
-    name: k.name,
-    periodLabel: formatPeriodLabel(k.year, k.month),
-    periodStatus: k.periodStatus,
-  }));
 
   let ledgerData;
   try {
@@ -35,17 +25,7 @@ export default async function KitchenReviewPage({ params }: ReviewPageProps) {
   );
 
   return (
-    <main className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-subtle bg-surface px-4 py-2.5">
-        <DapurSwitcher
-          activeKitchenId={ledgerData.kitchen.id}
-          kitchens={switcherOptions}
-        />
-        <span className="text-xs text-ink-muted">
-          Manusia memeriksa sebelum posting — tidak ada posting otomatis
-        </span>
-      </div>
-
+    <main className="space-y-5">
       <ReviewWorkspace
         kitchen={{
           id: ledgerData.kitchen.id,

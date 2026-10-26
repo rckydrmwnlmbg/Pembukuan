@@ -1,14 +1,27 @@
+import { redirect } from 'next/navigation';
 import { defaultLedgerStore } from '@/server/ledger/service';
 import { DashboardSummary } from '@/components/domain/DashboardSummary';
 
-export default function DashboardPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ view?: string }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : {};
   const kitchens = defaultLedgerStore.listKitchenMeta();
 
+  // Jika ada dapur dan pengguna tidak secara eksplisit meminta tampilan ringkasan (?view=summary),
+  // langsung arahkan ke Buku Kas dapur utama sesuai preferensi alur kerja
+  const primaryKitchen = kitchens[0];
+  if (primaryKitchen && resolvedParams.view !== 'summary') {
+    redirect(`/k/${primaryKitchen.id}/ledger`);
+  }
+
   return (
-    <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink-base)] p-4 sm:p-8">
-      <div className="mx-auto max-w-5xl">
-        <DashboardSummary kitchens={kitchens} selectedPeriodLabel="Maret 2026" />
-      </div>
+    <div className="space-y-6">
+      <DashboardSummary kitchens={kitchens} selectedPeriodLabel="Maret 2026" />
     </div>
   );
 }

@@ -1,10 +1,8 @@
 import React from 'react';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { formatPeriodLabel } from '@/lib/format';
 import { defaultLedgerStore } from '@/server/ledger/service';
 import { defaultUploadStore } from '@/server/upload/service';
-import { DapurSwitcher } from '@/components/domain/DapurSwitcher';
 import {
   LedgerWorkspace,
   type SerializedKitchenInfo,
@@ -18,15 +16,6 @@ interface LedgerPageProps {
 
 export default async function KitchenLedgerPage({ params }: LedgerPageProps) {
   const { kitchenId } = await params;
-
-  const allKitchens = defaultLedgerStore.listKitchenMeta();
-  const switcherOptions = allKitchens.map((k) => ({
-    id: k.id,
-    code: k.code,
-    name: k.name,
-    periodLabel: formatPeriodLabel(k.year, k.month),
-    periodStatus: k.periodStatus,
-  }));
 
   let ledgerData;
   try {
@@ -97,30 +86,12 @@ export default async function KitchenLedgerPage({ params }: LedgerPageProps) {
   ).length;
 
   return (
-    <main className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-subtle bg-surface px-4 py-2.5">
-        <DapurSwitcher
-          activeKitchenId={serializedKitchen.id}
-          kitchens={switcherOptions}
-        />
-        <div className="flex items-center gap-3">
-          <Link
-            href={`/k/${serializedKitchen.id}/review`}
-            className="inline-flex h-8 items-center justify-center rounded-md border border-line-strong bg-surface-subtle px-3 text-xs font-medium text-ink-primary transition-colors hover:bg-accent-subtle"
-          >
-            Unggah & Review Bukti Transfer
-            {reviewQueueCount > 0 ? ` (${reviewQueueCount} draf)` : ''}
-          </Link>
-          <span className="hidden text-xs text-ink-muted sm:inline">
-            Isolasi per dapur aktif — tidak ada penjumlahan lintas dapur
-          </span>
-        </div>
-      </div>
-
+    <main className="space-y-5">
       <LedgerWorkspace
         kitchen={serializedKitchen}
         initialRows={serializedRows}
         initialSummary={serializedSummary}
+        reviewQueueCount={reviewQueueCount}
       />
     </main>
   );

@@ -1,50 +1,45 @@
 import React from 'react';
-import Link from 'next/link';
-import { Badge } from '@/components/ui/Badge';
 import { requireUser } from '@/server/auth/require-user';
-import { LogoutButton } from '@/components/domain/LogoutButton';
+import { defaultLedgerStore } from '@/server/ledger/service';
+import { formatPeriodLabel } from '@/lib/format';
+import { Sidebar, type SidebarKitchenMeta } from '@/components/domain/Sidebar';
+
+export const dynamic = 'force-dynamic';
 
 /**
- * AppShellLayout untuk seluruh halaman terlindungi di bawah `(app)`:
- * Wajib memanggil requireUser() untuk menegakkan otorisasi sesi & MFA AAL2 (SECURITY.md S-01).
- * Halaman publik hanya `/`, `/login`, dan callback auth.
+ * AppShellLayout untuk seluruh layar pembukuan internal:
+ * Sidebar navigasi vertikal di kiri (Linear/Stripe style) + Area kerja utama.
  */
 export default async function AppShellLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  await requireUser();
+  const { user } = await requireUser();
+
+  const allKitchens = defaultLedgerStore.listKitchenMeta();
+  const serializedKitchens: SidebarKitchenMeta[] = allKitchens.map((k) => ({
+    id: k.id,
+    code: k.code,
+    name: k.name,
+    bankCode: k.bankCode,
+    accountNoLast4: k.accountNoLast4,
+    periodLabel: formatPeriodLabel(k.year, k.month),
+  }));
 
   return (
-    <div className="min-h-screen bg-canvas text-ink-primary">
-      {/* Bilah atas 56px (DESIGN.md §4) */}
-      <header className="sticky top-0 z-30 h-14 border-b border-line-subtle bg-surface px-4 sm:px-6">
-        <div className="mx-auto flex h-full max-w-[1440px] items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="text-base font-semibold tracking-tight text-ink-primary focus-visible:outline-2 focus-visible:outline-focus-ring"
-            >
-              Kasdapur
-            </Link>
-            <span className="hidden text-xs text-ink-muted md:inline">
-              Pembukuan Buku Kas per Dapur (SPPG)
-            </span>
-          </div>
+    <div className="flex min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
+      {/* Sidebar Navigasi Tetap di Kiri (Linear / Stripe Style) */}
+      <Sidebar
+        kitchens={serializedKitchens}
+        userEmail={user?.email || 'Maker Keuangan'}
+      />
 
-          <div className="flex items-center gap-2.5">
-            <Badge tone="warning" title="Seluruh data di lingkungan ini adalah data sintetis">
-              Data contoh
-            </Badge>
-            <Badge tone="accent">MFA AAL2 Aktif</Badge>
-            <LogoutButton />
-          </div>
+      {/* Area Konten Utama */}
+      <div className="flex flex-1 flex-col min-w-0 overflow-y-auto">
+        <div className="w-full max-w-[1440px] mx-auto p-4 sm:p-6 lg:p-8">
+          {children}
         </div>
-      </header>
-
-      <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6">
-        {children}
       </div>
     </div>
   );
