@@ -1145,15 +1145,28 @@ export async function processBatchUploadToSupabase(
 
     // Unggah ke Supabase Storage bucket 'uploads'
     try {
-      await supabase.storage
+      const admin = createAdminClient();
+      await admin.storage.createBucket('uploads', { public: false }).catch(() => {});
+      await admin.storage
         .from('uploads')
         .upload(normalized.storagePath, normalized.bytes, {
           contentType: normalized.mediaType,
           upsert: true,
         });
     } catch {
-      // Storage upload non-fatal bila bucket belum dibuat di dashboard
+      try {
+        await supabase.storage
+          .from('uploads')
+          .upload(normalized.storagePath, normalized.bytes, {
+            contentType: normalized.mediaType,
+            upsert: true,
+          });
+      } catch {
+        // Storage upload non-fatal bila bucket belum dibuat di dashboard
+      }
     }
+    // Simpan juga di memory cache agar pratinjau selalu dapat diakses seketika
+    defaultUploadStore.saveFileBytes(normalized.storagePath, normalized.bytes);
 
     const env = getExtractionEnv();
     let extracted: Extracted | null = null;
@@ -1385,6 +1398,37 @@ export async function getSupabaseUploadFileBytes(
     throw new HttpError(404, 'Berkas unggahan tidak ditemukan.');
   }
 
+  // 1. Cek memory cache lokal
+  const cached = defaultUploadStore.getCachedFileBytes(uploadRow.storage_path);
+  if (cached) {
+    return {
+      bytes: cached,
+      mime: uploadRow.mime,
+      displayName: uploadRow.original_name,
+    };
+  }
+
+  // 2. Unduh dari Supabase Storage (coba admin client dulu, lalu client pengguna)
+  try {
+    const admin = createAdminClient();
+    const { data: fileData, error: dlErr } = await admin.storage
+      .from('uploads')
+      .download(uploadRow.storage_path);
+
+    if (!dlErr && fileData) {
+      const buf = await fileData.arrayBuffer();
+      const arr = new Uint8Array(buf);
+      defaultUploadStore.saveFileBytes(uploadRow.storage_path, arr);
+      return {
+        bytes: arr,
+        mime: uploadRow.mime,
+        displayName: uploadRow.original_name,
+      };
+    }
+  } catch {
+    // Abaikan
+  }
+
   try {
     const { data: fileData, error: dlErr } = await supabase.storage
       .from('uploads')
@@ -1392,8 +1436,10 @@ export async function getSupabaseUploadFileBytes(
 
     if (!dlErr && fileData) {
       const buf = await fileData.arrayBuffer();
+      const arr = new Uint8Array(buf);
+      defaultUploadStore.saveFileBytes(uploadRow.storage_path, arr);
       return {
-        bytes: new Uint8Array(buf),
+        bytes: arr,
         mime: uploadRow.mime,
         displayName: uploadRow.original_name,
       };

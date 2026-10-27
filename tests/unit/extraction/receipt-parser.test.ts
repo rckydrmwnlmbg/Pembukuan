@@ -62,6 +62,34 @@ describe('Deterministic Indonesian Bank Receipt Parser (receipt-parser)', () => 
     expect(resB?.recipientBank).toBe('BRI');
   });
 
+  it('berhasil mengekstrak format corporate / CMS In-House Transfer (DD-Mon-YYYY & IDR nominal)', () => {
+    const cms = `
+      TRANSACTION HISTORY
+      Action Date
+      Action Type
+      Execute
+      22-Jan-2026 20:48:51
+      Sukses
+      6,000,000.00 IDR
+      In House Transfer
+      Reference No. : 20260122131628675842
+      From Account : 999088001001/PT Dapur Sejahtera (IDR)
+      Amount : IDR 6,000,000.00
+      To Account : 999010018821/YAYASAN CONTOH AMANAH (IDR)
+      Remark : INSENTIF FASILITAS SPPG BULAN JANUARI
+    `;
+    const res = parseReceiptText(cms);
+    expect(res).not.toBeNull();
+    expect(res?.txDate).toBe('2026-01-22');
+    expect(res?.amount).toBe('6000000');
+    expect(res?.referenceNo).toBe('20260122131628675842');
+    expect(res?.senderAccount).toBe('999088001001');
+    expect(res?.recipientAccount).toBe('999010018821');
+    expect(res?.recipientName).toContain('YAYASAN CONTOH AMANAH');
+    expect(res?.recipientBank).toBe('BNI');
+    expect(res?.memo).toContain('INSENTIF FASILITAS SPPG');
+  });
+
   it('gagal aman (mengembalikan null) jika teks tidak memiliki tanggal atau nominal valid (AGENTS.md #5)', () => {
     expect(parseReceiptText('')).toBeNull();
     expect(parseReceiptText('Ini bukan bukti transfer hanya dokumen acak')).toBeNull();

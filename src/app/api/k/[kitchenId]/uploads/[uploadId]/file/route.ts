@@ -27,11 +27,13 @@ export const GET = kitchenRoute(
       fileData = await defaultUploadStore.getUploadFileBytes(kitchenId, uploadId);
     }
 
+    const safeFileName = encodeURIComponent(fileData.displayName || 'bukti-transfer');
     return new Response(new Uint8Array(fileData.bytes), {
       status: 200,
       headers: {
         'Content-Type': fileData.mime,
-        'Cache-Control': 'private, max-age=60',
+        'Content-Disposition': `inline; filename="${safeFileName}"`,
+        'Cache-Control': 'private, max-age=300',
         'X-Content-Type-Options': 'nosniff',
       },
     });

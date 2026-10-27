@@ -42,20 +42,8 @@ const BANK_PATTERNS: Array<{ regex: RegExp; name: string }> = [
 ];
 
 function extractDate(text: string): string | null {
-  // 1. YYYY-MM-DD
-  const iso = text.match(/\b(20\d{2})[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b/);
-  if (iso) {
-    return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  }
-
-  // 2. DD/MM/YYYY or DD-MM-YYYY
-  const dmy = text.match(/\b(0[1-9]|[12]\d|3[01])[-/](0[1-9]|1[0-2])[-/](20\d{2})\b/);
-  if (dmy) {
-    return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-  }
-
-  // 3. DD Mon YYYY / DD Month YYYY (misal: 25 Mar 2026 atau 25 Maret 2026)
-  const dMonY = text.match(/\b(0?[1-9]|[12]\d|3[01])\s+([A-Za-z]{3,9})\s+(20\d{2})\b/i);
+  // 1. DD-Mon-YYYY atau DD Mon YYYY atau DD/Mon/YYYY (misal: 22-Jan-2026 atau 25 Maret 2026)
+  const dMonY = text.match(/\b(0?[1-9]|[12]\d|3[01])[-/\s]+([A-Za-z]{3,9})[-/\s]+(20\d{2})\b/i);
   if (dMonY) {
     const day = dMonY[1]!.padStart(2, '0');
     const monthKey = dMonY[2]!.toLowerCase();
@@ -66,13 +54,25 @@ function extractDate(text: string): string | null {
     }
   }
 
+  // 2. YYYY-MM-DD
+  const iso = text.match(/\b(20\d{2})[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b/);
+  if (iso) {
+    return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  }
+
+  // 3. DD/MM/YYYY or DD-MM-YYYY
+  const dmy = text.match(/\b(0[1-9]|[12]\d|3[01])[-/](0[1-9]|1[0-2])[-/](20\d{2})\b/);
+  if (dmy) {
+    return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  }
+
   return null;
 }
 
 function extractAmount(text: string): string | null {
-  // 1. Label eksplisit: Nominal / Jumlah / Total / Transfer : Rp 2.450.000,00
+  // 1. Label eksplisit: Amount / Nominal / Total / Transfer : [IDR/Rp] 6,000,000.00
   const labeled = text.match(
-    /(?:nominal|jumlah|total|sebesar|transfer|amount)(?:\s*(?:transfer|transaksi))?[:\s]*rp\.?\s*([\d.,]+)/i,
+    /(?:nominal|jumlah|total|sebesar|transfer|amount)(?:\s*(?:transfer|transaksi))?[:\s]*(?:idr|rp\.?)?\s*([\d.,]+)/i,
   );
   if (labeled && labeled[1]) {
     const raw = labeled[1].trim();
@@ -88,9 +88,9 @@ function extractAmount(text: string): string | null {
     }
   }
 
-  // 2. Format Rp dengan pemisah ribuan: Rp 2.450.000 atau Rp. 150.000
-  const rpMatches = text.matchAll(/rp\.?\s*(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|\d{4,12})\b/gi);
-  for (const m of rpMatches) {
+  // 2. Format IDR atau Rp dengan pemisah: IDR 6,000,000.00 atau Rp 2.450.000
+  const curMatches = text.matchAll(/(?:rp\.?|idr)\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d{4,12})\b/gi);
+  for (const m of curMatches) {
     const raw = m[1] ?? '';
     const noCents = raw.replace(/[,.]00$/, '');
     const digits = noCents.replace(/[^\d]/g, '');
@@ -107,63 +107,91 @@ function extractAmount(text: string): string | null {
 }
 
 function extractReferenceNo(text: string): string | null {
-  const refMatch = text.match(
-    /(?:no\.?\s*(?:ref(?:erensi)?|transaksi|resi|dokumen|order)|id\s*transaksi|reference(?:\s*no)?|trace\s*no)[:\s]*([A-Za-z0-9\-_./]{6,64})/i,
-  );
-  if (refMatch && refMatch[1]) {
-    return refMatch[1].trim();
-  }
-
-  // Cek nomor referensi numerik panjang (mis. 202603250001)
-  const longNum = text.match(/\b(20\d{10,20})\b/);
+  // 1. Nomor referensi numerik panjang (mis. 20260122131628675842) khas BNI Direct / CMS / Core
+  const longNum = text.match(/\b(20\d{14,24})\b/);
   if (longNum && longNum[1]) {
     return longNum[1].trim();
   }
 
+  // 2. Reference No. : 202603250001 atau No. Ref : 202603250001
+  const refMatch = text.match(
+    /(?:reference\s*no\.?|ref(?:erence)?\s*id|no\.?\s*(?:ref(?:erensi)?|transaksi|resi|dokumen|order)|id\s*transaksi|trace\s*no)[:\s]*([A-Za-z0-9\-_./]{6,64})/i,
+  );
+  if (refMatch && refMatch[1] && !/^(?:reference|beneficiary|transaction)$/i.test(refMatch[1])) {
+    return refMatch[1].trim();
+  }
+
+  // 3. Fallback: digit 10-14 berawalan 20
+  const midNum = text.match(/\b(20\d{10,13})\b/);
+  if (midNum && midNum[1]) {
+    return midNum[1].trim();
+  }
+
   return null;
 }
 
-function extractRecipientAccount(text: string): string | null {
-  const accMatch = text.match(
-    /(?:rekening\s*(?:tujuan|penerima)|ke\s*rekening|no\.?\s*rek(?:ening)?\s*tujuan|rekening\s*tujuan)[:\s]*(\d{8,25})/i,
-  );
-  if (accMatch && accMatch[1]) {
-    return accMatch[1].trim();
-  }
-  return null;
-}
+function extractAccountsAndNames(text: string): {
+  senderAccount: string | null;
+  recipientAccount: string | null;
+  recipientName: string | null;
+} {
+  let senderAccount: string | null = null;
+  let recipientAccount: string | null = null;
+  let recipientName: string | null = null;
 
-function extractSenderAccount(text: string): string | null {
-  const accMatch = text.match(
-    /(?:rekening\s*pengirim|dari\s*rekening|no\.?\s*rek(?:ening)?\s*pengirim)[:\s]*(\d{8,25})/i,
-  );
-  if (accMatch && accMatch[1]) {
-    return accMatch[1].trim();
-  }
-  return null;
-}
-
-function extractRecipientName(text: string): string | null {
-  // Misal: Rekening Penerima : 999010018821 a.n UD Pangan Segar
-  const anMatch = text.match(/(?:a\.n\.?|atas\s*nama)\s+([^\n\r,:]{2,80})/i);
-  if (anMatch && anMatch[1]) {
-    return anMatch[1].trim().replace(/\s+(?:ke|dari|nominal|rp|bank).*$/i, '');
+  // 1. Pola CMS / Corporate: From Account dan To Account dengan format: <nomor_rekening>/<nama_pemilik>
+  const pairs = Array.from(text.matchAll(/(\d{8,25})\s*\/\s*([^\n\r(]+)/g));
+  if (pairs.length >= 2) {
+    senderAccount = pairs[0]![1]!.trim();
+    recipientAccount = pairs[1]![1]!.trim();
+    recipientName = pairs[1]![2]!.trim().replace(/\s{2,}.*$/, '').trim();
+  } else if (pairs.length === 1) {
+    recipientAccount = pairs[0]![1]!.trim();
+    recipientName = pairs[0]![2]!.trim().replace(/\s{2,}.*$/, '').trim();
   }
 
-  // Misal: Nama Penerima : UD Pangan Segar
-  const nameMatch = text.match(
-    /(?:nama\s*(?:penerima|tujuan)|penerima)[:\s]+([^\n\r,:]{2,80})/i,
-  );
-  if (nameMatch && nameMatch[1]) {
-    const val = nameMatch[1].trim().replace(/\s+(?:ke|dari|nominal|rp|bank).*$/i, '');
-    if (!/^\d+$/.test(val)) return val;
+  // 2. Pola label eksplisit jika belum terisi
+  if (!recipientAccount) {
+    const toAcc = text.match(
+      /(?:to\s*account|rekening\s*(?:tujuan|penerima)|ke\s*rekening|no\.?\s*rek(?:ening)?\s*tujuan|rekening\s*tujuan)[:\s]*(\d{8,25})/i,
+    );
+    if (toAcc && toAcc[1]) {
+      recipientAccount = toAcc[1].trim();
+    }
   }
 
-  return null;
+  if (!senderAccount) {
+    const fromAcc = text.match(
+      /(?:from\s*account|rekening\s*pengirim|dari\s*rekening|no\.?\s*rek(?:ening)?\s*pengirim)[:\s]*(\d{8,25})/i,
+    );
+    if (fromAcc && fromAcc[1]) {
+      senderAccount = fromAcc[1].trim();
+    }
+  }
+
+  if (!recipientName) {
+    // a.n UD Pangan Segar
+    const anMatch = text.match(/(?:a\.n\.?|atas\s*nama)\s+([^\n\r,:]{2,80})/i);
+    if (anMatch && anMatch[1]) {
+      recipientName = anMatch[1].trim().replace(/\s+(?:ke|dari|nominal|rp|bank).*$/i, '');
+    } else {
+      const nameMatch = text.match(
+        /(?:nama\s*(?:penerima|tujuan)|beneficiary(?:\s*name)?|penerima)[:\s]+([^\n\r,:]{2,80})/i,
+      );
+      if (nameMatch && nameMatch[1]) {
+        const val = nameMatch[1].trim().replace(/\s+(?:ke|dari|nominal|rp|bank).*$/i, '');
+        if (!/^\d+$/.test(val) && !/^(?:information|account)$/i.test(val)) {
+          recipientName = val;
+        }
+      }
+    }
+  }
+
+  return { senderAccount, recipientAccount, recipientName };
 }
 
 function extractBank(text: string): string | null {
-  // Cek jika ada label eksplisit: Bank Tujuan : BCA
+  // 1. Cek jika ada label eksplisit: Bank Tujuan : BCA
   const labeled = text.match(/(?:bank\s*(?:tujuan|penerima)?|nama\s*bank)[:\s]*([A-Za-z0-9\s]{2,30})/i);
   if (labeled && labeled[1]) {
     const trimmed = labeled[1].trim().toUpperCase();
@@ -172,23 +200,35 @@ function extractBank(text: string): string | null {
     }
   }
 
-  // Cek kata kunci bank di seluruh teks
+  // 2. Cek kata kunci bank di seluruh teks
   for (const b of BANK_PATTERNS) {
     if (b.regex.test(text)) {
       return b.name;
     }
   }
 
+  // 3. Jika In-House Transfer (misal BNI Direct internal)
+  if (/in\s*house\s*transfer/i.test(text)) {
+    return 'BNI';
+  }
+
   return null;
 }
 
 function extractMemo(text: string): string | null {
+  // 1. Cari keterangan berita / remark yang jelas
+  const memoLines = text.match(/(?:INSENTIF\s+[^\n\r]+|BIAYA\s+[^\n\r]+|PEMBELIAN\s+[^\n\r]+|PEMBAYARAN\s+[^\n\r]+|BELANJA\s+[^\n\r]+)/i);
+  if (memoLines && memoLines[0]) {
+    return memoLines[0].trim();
+  }
+
   const memoMatch = text.match(
-    /(?:berita|catatan|keterangan|pesan|memo)[:\s]+([^\n\r]{2,150})/i,
+    /(?:remark|berita|catatan|keterangan|pesan|memo)[:\s]+([^\n\r]{2,150})/i,
   );
-  if (memoMatch && memoMatch[1]) {
+  if (memoMatch && memoMatch[1] && !/^(?:to\s*account|from\s*account|amount)$/i.test(memoMatch[1].trim())) {
     return memoMatch[1].trim();
   }
+
   return null;
 }
 
@@ -210,9 +250,7 @@ export function parseReceiptText(rawText: string): Extracted | null {
   }
 
   const referenceNo = extractReferenceNo(rawText);
-  const senderAccount = extractSenderAccount(rawText);
-  const recipientAccount = extractRecipientAccount(rawText);
-  const recipientName = extractRecipientName(rawText);
+  const { senderAccount, recipientAccount, recipientName } = extractAccountsAndNames(rawText);
   const recipientBank = extractBank(rawText);
   const memo = extractMemo(rawText);
 

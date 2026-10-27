@@ -330,6 +330,14 @@ export class UploadServiceStore {
     };
   }
 
+  public saveFileBytes(storagePath: string, bytes: Uint8Array): void {
+    this.fileBytesStore.set(storagePath, bytes);
+  }
+
+  public getCachedFileBytes(storagePath: string): Uint8Array | undefined {
+    return this.fileBytesStore.get(storagePath);
+  }
+
   /**
    * Menemukan dapur pemilik nomor rekening pengirim (PRD FR-F3.4: satu rekening = satu dapur).
    */

@@ -400,15 +400,33 @@ export function ReviewWorkspace({
                 className="relative flex min-h-[540px] flex-1 cursor-grab items-center justify-center overflow-auto bg-surface-subtle p-4 active:cursor-grabbing"
               >
                 {activeItem.mime === 'application/pdf' ? (
-                  <iframe
-                    title={`Pratinjau PDF ${activeItem.originalName}`}
-                    src={`/api/k/${kitchen.id}/uploads/${activeItem.id}/file`}
+                  <object
+                    data={`/api/k/${kitchen.id}/uploads/${activeItem.id}/file`}
+                    type="application/pdf"
                     className="h-[520px] w-full rounded border border-line-subtle bg-surface"
                     style={{
                       transform: `scale(${zoomPercent / 100})`,
                       transformOrigin: 'top center',
                     }}
-                  />
+                  >
+                    <iframe
+                      title={`Pratinjau PDF ${activeItem.originalName}`}
+                      src={`/api/k/${kitchen.id}/uploads/${activeItem.id}/file`}
+                      className="h-[520px] w-full rounded border border-line-subtle bg-surface"
+                    >
+                      <div className="flex flex-col items-center justify-center p-8 text-center text-ink-secondary">
+                        <p className="mb-2">Pratinjau PDF tidak didukung otomatis di peramban ini.</p>
+                        <a
+                          href={`/api/k/${kitchen.id}/uploads/${activeItem.id}/file`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-brand hover:underline"
+                        >
+                          Buka berkas PDF di tab baru
+                        </a>
+                      </div>
+                    </iframe>
+                  </object>
                 ) : (
                   <img
                     src={`/api/k/${kitchen.id}/uploads/${activeItem.id}/file`}

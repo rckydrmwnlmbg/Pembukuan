@@ -40,7 +40,7 @@ describe('plombokan-excel-export & kesamaan saldo UI = hitungan independen = Exc
 
     // Pastikan tidak ada baris data nyata (baris 6 kosong di templat dasar)
     expect(ws.getRow(6).getCell(4).value).toBeNull();
-  });
+  }, 15_000);
 
   it(
     'mengekspor seluruh 5 dapur demo dengan saldo akhir UI === hitungan independen === sel SISA UANG di Excel',

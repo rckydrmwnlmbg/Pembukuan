@@ -58,7 +58,16 @@ export function middleware(request: NextRequest): NextResponse {
     },
   });
 
-  response.headers.set('Content-Security-Policy', csp);
+  const isUploadFileRoute =
+    pathname.includes('/uploads/') && pathname.endsWith('/file');
+  if (isUploadFileRoute) {
+    const fileCsp = csp
+      .replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+      .replace("object-src 'none'", "object-src 'self'");
+    response.headers.set('Content-Security-Policy', fileCsp);
+  } else {
+    response.headers.set('Content-Security-Policy', csp);
+  }
   return response;
 }
 

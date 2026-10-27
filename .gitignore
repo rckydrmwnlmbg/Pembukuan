@@ -21,6 +21,7 @@ node_modules/
 # Real Excel / PDF data (AGENTS.md Golden Rule #6: NEVER commit real data)
 *.xlsx
 *.xls
+*.pdf
 !tests/fixtures/template/*.xlsx
 
 # Logs & OS artifacts
