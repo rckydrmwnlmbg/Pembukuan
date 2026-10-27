@@ -17,6 +17,7 @@ set
   file_size_limit = 10485760,
   allowed_mime_types = array['application/pdf', 'image/jpeg', 'image/png'];
 
+drop policy if exists "uploads_select_by_kitchen" on storage.objects;
 create policy "uploads_select_by_kitchen" on storage.objects
   for select to authenticated
   using (
@@ -27,6 +28,7 @@ create policy "uploads_select_by_kitchen" on storage.objects
     )
   );
 
+drop policy if exists "uploads_insert_by_kitchen" on storage.objects;
 create policy "uploads_insert_by_kitchen" on storage.objects
   for insert to authenticated
   with check (

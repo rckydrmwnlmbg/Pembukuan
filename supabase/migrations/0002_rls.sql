@@ -68,6 +68,7 @@ grant execute on function public.has_org_role(uuid, text[]) to authenticated;
 alter table public.organizations enable row level security;
 alter table public.organizations force row level security;
 
+drop policy if exists org_select on public.organizations;
 create policy org_select on public.organizations
   for select to authenticated
   using (public.has_org_role(id, array['admin','maker','approver','viewer']));
@@ -76,14 +77,17 @@ create policy org_select on public.organizations
 alter table public.profiles enable row level security;
 alter table public.profiles force row level security;
 
+drop policy if exists profiles_select_own on public.profiles;
 create policy profiles_select_own on public.profiles
   for select to authenticated
   using (user_id = (select auth.uid()));
 
+drop policy if exists profiles_insert_own on public.profiles;
 create policy profiles_insert_own on public.profiles
   for insert to authenticated
   with check (user_id = (select auth.uid()));
 
+drop policy if exists profiles_update_own on public.profiles;
 create policy profiles_update_own on public.profiles
   for update to authenticated
   using (user_id = (select auth.uid()))
@@ -93,14 +97,17 @@ create policy profiles_update_own on public.profiles
 alter table public.kitchens enable row level security;
 alter table public.kitchens force row level security;
 
+drop policy if exists kitchens_select on public.kitchens;
 create policy kitchens_select on public.kitchens
   for select to authenticated
   using (public.has_kitchen_role(id, array['admin','maker','approver','viewer']));
 
+drop policy if exists kitchens_insert on public.kitchens;
 create policy kitchens_insert on public.kitchens
   for insert to authenticated
   with check (public.has_org_role(organization_id, array['admin']));
 
+drop policy if exists kitchens_update on public.kitchens;
 create policy kitchens_update on public.kitchens
   for update to authenticated
   using (public.has_kitchen_role(id, array['admin']))
@@ -110,6 +117,7 @@ create policy kitchens_update on public.kitchens
 alter table public.kitchen_members enable row level security;
 alter table public.kitchen_members force row level security;
 
+drop policy if exists km_select on public.kitchen_members;
 create policy km_select on public.kitchen_members
   for select to authenticated
   using (
@@ -117,15 +125,18 @@ create policy km_select on public.kitchen_members
     or public.has_kitchen_role(kitchen_id, array['admin'])
   );
 
+drop policy if exists km_insert on public.kitchen_members;
 create policy km_insert on public.kitchen_members
   for insert to authenticated
   with check (public.has_kitchen_role(kitchen_id, array['admin']));
 
+drop policy if exists km_update on public.kitchen_members;
 create policy km_update on public.kitchen_members
   for update to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin']))
   with check (public.has_kitchen_role(kitchen_id, array['admin']));
 
+drop policy if exists km_delete on public.kitchen_members;
 create policy km_delete on public.kitchen_members
   for delete to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin']));
@@ -134,14 +145,17 @@ create policy km_delete on public.kitchen_members
 alter table public.bank_accounts enable row level security;
 alter table public.bank_accounts force row level security;
 
+drop policy if exists ba_select on public.bank_accounts;
 create policy ba_select on public.bank_accounts
   for select to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin','maker','approver','viewer']));
 
+drop policy if exists ba_insert on public.bank_accounts;
 create policy ba_insert on public.bank_accounts
   for insert to authenticated
   with check (public.has_kitchen_role(kitchen_id, array['admin']));
 
+drop policy if exists ba_update on public.bank_accounts;
 create policy ba_update on public.bank_accounts
   for update to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin']))
@@ -151,14 +165,17 @@ create policy ba_update on public.bank_accounts
 alter table public.periods enable row level security;
 alter table public.periods force row level security;
 
+drop policy if exists periods_select on public.periods;
 create policy periods_select on public.periods
   for select to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin','maker','approver','viewer']));
 
+drop policy if exists periods_insert on public.periods;
 create policy periods_insert on public.periods
   for insert to authenticated
   with check (public.has_kitchen_role(kitchen_id, array['admin','maker']));
 
+drop policy if exists periods_update on public.periods;
 create policy periods_update on public.periods
   for update to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin','maker']))
@@ -168,14 +185,17 @@ create policy periods_update on public.periods
 alter table public.uploads enable row level security;
 alter table public.uploads force row level security;
 
+drop policy if exists uploads_select on public.uploads;
 create policy uploads_select on public.uploads
   for select to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin','maker','approver','viewer']));
 
+drop policy if exists uploads_insert on public.uploads;
 create policy uploads_insert on public.uploads
   for insert to authenticated
   with check (public.has_kitchen_role(kitchen_id, array['admin','maker']));
 
+drop policy if exists uploads_update on public.uploads;
 create policy uploads_update on public.uploads
   for update to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin','maker']))
@@ -185,14 +205,17 @@ create policy uploads_update on public.uploads
 alter table public.categories enable row level security;
 alter table public.categories force row level security;
 
+drop policy if exists categories_select on public.categories;
 create policy categories_select on public.categories
   for select to authenticated
   using (public.has_org_role(organization_id, array['admin','maker','approver','viewer']));
 
+drop policy if exists categories_insert on public.categories;
 create policy categories_insert on public.categories
   for insert to authenticated
   with check (public.has_org_role(organization_id, array['admin','maker']));
 
+drop policy if exists categories_update on public.categories;
 create policy categories_update on public.categories
   for update to authenticated
   using (public.has_org_role(organization_id, array['admin','maker']))
@@ -202,14 +225,17 @@ create policy categories_update on public.categories
 alter table public.counterparty_rules enable row level security;
 alter table public.counterparty_rules force row level security;
 
+drop policy if exists cr_select on public.counterparty_rules;
 create policy cr_select on public.counterparty_rules
   for select to authenticated
   using (public.has_org_role(organization_id, array['admin','maker','approver','viewer']));
 
+drop policy if exists cr_insert on public.counterparty_rules;
 create policy cr_insert on public.counterparty_rules
   for insert to authenticated
   with check (public.has_org_role(organization_id, array['admin','maker']));
 
+drop policy if exists cr_update on public.counterparty_rules;
 create policy cr_update on public.counterparty_rules
   for update to authenticated
   using (public.has_org_role(organization_id, array['admin','maker']))
@@ -219,14 +245,17 @@ create policy cr_update on public.counterparty_rules
 alter table public.transactions enable row level security;
 alter table public.transactions force row level security;
 
+drop policy if exists tx_select on public.transactions;
 create policy tx_select on public.transactions
   for select to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin','maker','approver','viewer']));
 
+drop policy if exists tx_insert on public.transactions;
 create policy tx_insert on public.transactions
   for insert to authenticated
   with check (public.has_kitchen_role(kitchen_id, array['admin','maker']));
 
+drop policy if exists tx_update on public.transactions;
 create policy tx_update on public.transactions
   for update to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin','maker']))
@@ -236,10 +265,12 @@ create policy tx_update on public.transactions
 alter table public.audit_logs enable row level security;
 alter table public.audit_logs force row level security;
 
+drop policy if exists audit_select on public.audit_logs;
 create policy audit_select on public.audit_logs
   for select to authenticated
   using (public.has_kitchen_role(kitchen_id, array['admin','maker','approver','viewer']));
 
+drop policy if exists audit_insert on public.audit_logs;
 create policy audit_insert on public.audit_logs
   for insert to authenticated
   with check (public.has_kitchen_role(kitchen_id, array['admin','maker']));
