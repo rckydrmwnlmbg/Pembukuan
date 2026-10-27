@@ -687,6 +687,29 @@ export function LedgerWorkspace({
                 <td className="px-2.5 py-2 text-xs text-[var(--ink-muted)]" />
               </tr>
 
+              {/* Baris Kosong bila belum ada transaksi atau hasil filter 0 */}
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={11}
+                    className="px-6 py-10 text-center text-xs text-[var(--ink-muted)] bg-[var(--surface)]"
+                  >
+                    <div className="flex flex-col items-center justify-center gap-1.5">
+                      <p className="font-semibold text-[var(--ink)] text-sm">
+                        {searchQuery.trim() || statusFilter !== 'all'
+                          ? 'Tidak ada transaksi yang cocok dengan filter pencarian.'
+                          : 'Belum ada transaksi operasional pada periode ini.'}
+                      </p>
+                      <p className="text-[var(--ink-muted)]">
+                        {searchQuery.trim() || statusFilter !== 'all'
+                          ? 'Periksa kembali ejaan atau klik tombol "Reset filter" di atas.'
+                          : 'Mulai dengan mengunggah berkas bukti transfer (PDF/JPG) atau catat transaksi manual.'}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+
               {/* Baris 2..N: Transaksi Buku Kas */}
               {rows.map((row) => {
                 const isVoid = row.status === 'void';

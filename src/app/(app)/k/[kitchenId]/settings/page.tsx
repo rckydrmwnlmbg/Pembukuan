@@ -14,6 +14,7 @@ import {
   Users,
   UserPlus,
   Trash2,
+  KeyRound,
 } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
 import { formatRupiahNumber } from '@/lib/format';
@@ -100,6 +101,13 @@ export default function KitchenSettingsPage({
   const [unlockReason, setUnlockReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Modal Pemulihan MFA Perangkat Hilang (PRD E18)
+  const [showMfaResetModal, setShowMfaResetModal] = useState(false);
+  const [targetMemberForMfa, setTargetMemberForMfa] =
+    useState<KitchenMemberItem | null>(null);
+  const [mfaResetReason, setMfaResetReason] = useState('');
+  const [mfaResetLoading, setMfaResetLoading] = useState(false);
+
   const fetchMembers = React.useCallback(async () => {
     try {
       const res = await fetch(`/api/k/${kitchenId}/members`);
@@ -183,6 +191,42 @@ export default function KitchenSettingsPage({
       }
     } catch {
       // Ignore
+    }
+  }
+
+  async function handleMfaReset() {
+    if (!targetMemberForMfa || mfaResetReason.trim().length < 10) return;
+    try {
+      setMfaResetLoading(true);
+      setMemberError(null);
+      setMemberSuccess(null);
+
+      const res = await fetch(
+        `/api/k/${kitchenId}/members/${targetMemberForMfa.userId}/mfa-reset`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: mfaResetReason.trim() }),
+        },
+      );
+
+      const resJson = await res.json();
+      if (!res.ok) {
+        throw new Error(resJson.error || 'Gagal mereset MFA pengguna.');
+      }
+
+      setShowMfaResetModal(false);
+      setMfaResetReason('');
+      setTargetMemberForMfa(null);
+      setMemberSuccess(
+        `Faktor autentikasi MFA untuk ${targetMemberForMfa.email} berhasil direset. Pengguna akan diminta mendaftar ulang saat login berikutnya.`,
+      );
+    } catch (err: unknown) {
+      setMemberError(
+        err instanceof Error ? err.message : 'Gagal mereset MFA pengguna.',
+      );
+    } finally {
+      setMfaResetLoading(false);
     }
   }
 
@@ -850,17 +894,42 @@ export default function KitchenSettingsPage({
                       </select>
                     </td>
                     <td className="px-3.5 py-2.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMember(m.userId, m.email)}
-                        title="Hapus Akses"
-                        className="p-1 rounded text-[var(--danger)] hover:bg-[var(--danger-subtle,#fce8e6)] transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetMemberForMfa(m);
+                            setMfaResetReason('');
+                            setShowMfaResetModal(true);
+                          }}
+                          title="Reset Autentikator MFA (E18)"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[var(--neutral-subtle)] transition-colors border border-[var(--line)]"
+                        >
+                          <KeyRound className="w-3 h-3 text-[var(--accent)]" />
+                          <span>Reset MFA</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMember(m.userId, m.email)}
+                          title="Hapus Akses"
+                          className="p-1 rounded text-[var(--danger)] hover:bg-[var(--danger-subtle,#fce8e6)] transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
+                {members.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={3}
+                      className="px-3.5 py-6 text-center text-xs text-[var(--ink-muted)]"
+                    >
+                      Belum ada akun lain yang diberi akses ke dapur ini.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -973,6 +1042,72 @@ export default function KitchenSettingsPage({
                   className="px-4 py-1.5 rounded-md bg-[var(--accent)] text-xs font-semibold text-[var(--ink-on-accent,#fff)] hover:opacity-90 disabled:opacity-50"
                 >
                   {actionLoading ? 'Membuka...' : 'Buka Kembali'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Pemulihan Perangkat MFA Hilang (PRD E18) */}
+        {showMfaResetModal && targetMemberForMfa && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-[var(--surface)] border border-[var(--line)] rounded-lg p-5 space-y-4 shadow-xl">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-[var(--accent)] shrink-0" />
+                <h4 className="text-sm font-semibold text-[var(--ink)]">
+                  Pemulihan Perangkat MFA (E18)
+                </h4>
+              </div>
+
+              <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
+                Reset autentikator untuk akun{' '}
+                <strong className="text-[var(--ink)]">
+                  {targetMemberForMfa.email}
+                </strong>
+                . Seluruh faktor TOTP lama akan dihapus dan pengguna diwajibkan
+                mendaftarkan perangkat baru saat login berikutnya.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[var(--ink-muted)]">
+                  Alasan tertulis pemulihan (minimal 10 karakter):
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Contoh: Ponsel maker rusak atau hilang, telah diverifikasi secara langsung."
+                  value={mfaResetReason}
+                  onChange={(e) => setMfaResetReason(e.target.value)}
+                  className="w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                />
+                <span className="text-[11px] text-[var(--ink-muted)]">
+                  Alasan ini akan dicatat secara permanen di tabel log audit (S-15).
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMfaResetModal(false);
+                    setTargetMemberForMfa(null);
+                    setMfaResetReason('');
+                  }}
+                  className="px-3 py-1.5 rounded-md border border-[var(--line)] text-xs text-[var(--ink-muted)] hover:bg-[var(--surface-muted)]"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMfaReset}
+                  disabled={
+                    mfaResetLoading || mfaResetReason.trim().length < 10
+                  }
+                  className="px-4 py-1.5 rounded-md bg-[var(--danger,#c5221f)] text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+                >
+                  {mfaResetLoading
+                    ? 'Mereset MFA...'
+                    : 'Ya, Reset Perangkat MFA'}
                 </button>
               </div>
             </div>

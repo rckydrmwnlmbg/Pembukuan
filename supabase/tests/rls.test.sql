@@ -143,6 +143,59 @@ begin
   end if;
 end $$;
 
+-- 3f. Uji Penegakan MFA TOTP AAL2 (FR-F1.1 & SECURITY S-01):
+-- Sesi pengguna dengan klaim AAL1 WAJIB ditolak oleh RLS untuk membaca atau menulis data dapur
+select set_config('request.jwt.claim.aal', 'aal1', true);
+
+do $$
+declare
+  v_count_aal1 int;
+  v_aal1_blocked boolean := false;
+begin
+  -- Sesi AAL1 dilarang membaca data dapur
+  select count(*) into v_count_aal1
+  from public.transactions
+  where kitchen_id = 'aaaaaaaa-0001-4001-8001-000000000001';
+
+  if v_count_aal1 <> 0 then
+    raise exception 'SECURITY S-01 GAGAL: sesi AAL1 berhasil membaca % transaksi dapur', v_count_aal1;
+  end if;
+
+  -- Sesi AAL1 dilarang INSERT data dapur
+  begin
+    insert into public.transactions (
+      kitchen_id, period_id, seq_no, tx_date, kind, reference_no, description, debit, credit, status, created_by
+    ) values (
+      'aaaaaaaa-0001-4001-8001-000000000001',
+      'aaaaaaaa-1001-4001-8001-000000000001',
+      99, '2026-03-05', 'outgoing', '20260305AAL1', 'Percobaan tulis sesi AAL1', 0, 10000, 'posted',
+      '11111111-1111-4111-8111-111111111111'
+    );
+  exception when others then
+    v_aal1_blocked := true;
+  end;
+
+  if not v_aal1_blocked then
+    raise exception 'SECURITY S-01 GAGAL: sesi AAL1 berhasil melakukan INSERT transaksi';
+  end if;
+end $$;
+
+-- Kembalikan sesi ke AAL2: membaca harus diizinkan kembali
+select set_config('request.jwt.claim.aal', 'aal2', true);
+
+do $$
+declare
+  v_count_aal2 int;
+begin
+  select count(*) into v_count_aal2
+  from public.transactions
+  where kitchen_id = 'aaaaaaaa-0001-4001-8001-000000000001';
+
+  if v_count_aal2 <> 1 then
+    raise exception 'SECURITY S-01 GAGAL: sesi AAL2 seharusnya dapat membaca 1 transaksi, dapat %', v_count_aal2;
+  end if;
+end $$;
+
 -- 4. Uji S-05: search_transactions tahan upaya injeksi string filter/SQL
 do $$
 declare

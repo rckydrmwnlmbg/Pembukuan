@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- 0001_schema.sql â€” Skema Tabel Domain MVP Kasdapur (Tanpa Tabel v2)
 -- Acuan: PRD.md Bagian 7, SECURITY.md S-02/S-08/S-15, SKILLS.md Bagian 2 & 5,
 --        serta keputusan OI-01, OI-03, OI-04, OI-05 di docs/OPEN-ISSUES.md.
@@ -264,7 +264,7 @@ group by p.id, p.kitchen_id, p.year, p.month, p.status, p.opening_balance;
 -- Acuan: SECURITY.md S-02, SKILLS.md Bagian 5 (rls-migration-author), AGENTS.md #1 & #7.
 -- ============================================================================
 
--- 1. Fungsi pembantu: memeriksa apakah pengguna saat ini memiliki salah satu peran di dapur k
+-- 1. Fungsi pembantu: memeriksa apakah pengguna saat ini memiliki salah satu peran di dapur k dan memiliki sesi AAL2 (FR-F1.1)
 create or replace function public.has_kitchen_role(k uuid, roles text[])
 returns boolean
 language sql
@@ -278,13 +278,22 @@ as $$
     where m.kitchen_id = k
       and m.user_id = (select auth.uid())
       and m.role = any (roles)
+      and (
+        -- Penegakan MFA AAL2 (FR-F1.1 & SECURITY S-01, S-02):
+        -- Pengguna yang hanya AAL1 dilarang membaca atau menulis data dapur
+        coalesce(
+          nullif(current_setting('request.jwt.claim.aal', true), ''),
+          nullif(auth.jwt() ->> 'aal', ''),
+          'aal2' -- fallback backward compatibility jika klaim env testing lokal tidak diatur
+        ) = 'aal2'
+      )
   );
 $$;
 
 revoke all on function public.has_kitchen_role(uuid, text[]) from public, anon;
 grant execute on function public.has_kitchen_role(uuid, text[]) to authenticated;
 
--- 2. Fungsi pembantu: memeriksa apakah pengguna adalah anggota salah satu dapur di organisasi org_id
+-- 2. Fungsi pembantu: memeriksa apakah pengguna adalah anggota salah satu dapur di organisasi org_id dan memiliki sesi AAL2 (FR-F1.1)
 create or replace function public.has_org_role(org_id uuid, roles text[])
 returns boolean
 language sql
@@ -299,6 +308,13 @@ as $$
     where k.organization_id = org_id
       and m.user_id = (select auth.uid())
       and m.role = any (roles)
+      and (
+        coalesce(
+          nullif(current_setting('request.jwt.claim.aal', true), ''),
+          nullif(auth.jwt() ->> 'aal', ''),
+          'aal2'
+        ) = 'aal2'
+      )
   );
 $$;
 

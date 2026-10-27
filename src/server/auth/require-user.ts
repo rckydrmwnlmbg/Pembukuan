@@ -121,7 +121,7 @@ export async function requireUser(options: RequireUserOptions = {}) {
 
   const { data: aal } =
     await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+  if (aal?.currentLevel !== 'aal2') {
     if (!redirectOnFailure) {
       throw new HttpError(
         403,

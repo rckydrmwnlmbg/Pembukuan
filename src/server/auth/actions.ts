@@ -58,14 +58,14 @@ export async function signInAction(formData: {
       return { error: 'Autentikasi gagal: data pengguna tidak ditemukan.' };
     }
 
-    // Periksa tingkat jaminan autentikasi (MFA)
-    const { data: aal } =
-      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+    // Periksa faktor MFA (FR-F1.1)
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const verifiedTotp = factors?.totp?.find((f) => f.status === 'verified');
+    if (verifiedTotp) {
       return { needMfa: true, isDemo: false };
     }
-
-    return { success: true, isDemo: false };
+    // Jika belum memiliki faktor terverifikasi, tetap wajibkan MFA (mode pendaftaran/enroll)
+    return { needMfa: true, isDemo: false };
   } catch (err: unknown) {
     return {
       error:
@@ -113,49 +113,165 @@ export async function setPasswordAction(formData: {
   }
 }
 
-/**
- * Server action untuk verifikasi kode MFA (TOTP).
- */
-export async function verifyMfaAction(code: string): Promise<{
-  success?: boolean;
+export interface MfaSetupResult {
+  isDemo?: boolean;
+  mode: 'enroll' | 'challenge';
+  factorId?: string;
+  qrCode?: string;
+  secret?: string;
   error?: string;
-}> {
+}
+
+/**
+ * Server action untuk mendapatkan status dan data pendaftaran/tantangan MFA TOTP (FR-F1.1).
+ * Jika pengguna belum mendaftarkan TOTP, secara otomatis membuat factor baru dan mengembalikan QR + kode rahasia.
+ * Jika pengguna sudah memiliki TOTP terverifikasi, mengembalikan mode 'challenge'.
+ */
+export async function getMfaSetupAction(): Promise<MfaSetupResult> {
   const cookieStore = await cookies();
   const isDemoSession =
     cookieStore.get('kasdapur_session')?.value === 'authenticated';
 
   if (isDemoSession) {
-    if (code.length === 6) {
-      return { success: true };
-    }
-    return { error: 'Kode verifikasi harus berupa 6 digit angka.' };
+    return {
+      isDemo: true,
+      mode: 'challenge',
+      factorId: 'demo-totp-factor-id',
+    };
   }
 
   try {
     const supabase = await createClient();
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr || !user) {
+      return {
+        mode: 'challenge',
+        error: 'Sesi tidak ditemukan atau telah berakhir. Silakan login kembali.',
+      };
+    }
+
     const { data: factors, error: factorsErr } =
       await supabase.auth.mfa.listFactors();
     if (factorsErr) {
-      return { error: factorsErr.message };
+      return { mode: 'challenge', error: factorsErr.message };
     }
 
-    if (!factors.totp || factors.totp.length === 0) {
-      // Belum ada TOTP terdaftar di Supabase, langsung sukses
-      return { success: true };
+    const verifiedTotp = factors?.totp?.[0];
+    if (verifiedTotp) {
+      return {
+        isDemo: false,
+        mode: 'challenge',
+        factorId: verifiedTotp.id,
+      };
     }
 
-    const firstTotp = factors.totp[0];
-    if (!firstTotp) {
-      return { success: true };
+    // Bersihkan faktor pendaftaran sebelumnya yang belum diverifikasi
+    const unverifiedList =
+      factors?.all?.filter(
+        (f) => f.factor_type === 'totp' && f.status === 'unverified',
+      ) ?? [];
+    for (const unfactor of unverifiedList) {
+      await supabase.auth.mfa.unenroll({ factorId: unfactor.id }).catch(() => {});
     }
-    const factorId = firstTotp.id;
+
+    // Buat pendaftaran faktor TOTP baru (QR SVG + kode teks rahasia)
+    const { data: enrollData, error: enrollErr } =
+      await supabase.auth.mfa.enroll({
+        factorType: 'totp',
+        issuer: 'Kasdapur',
+      });
+
+    if (enrollErr || !enrollData) {
+      return {
+        mode: 'enroll',
+        error: enrollErr ? enrollErr.message : 'Gagal membuat pendaftaran TOTP baru.',
+      };
+    }
+
+    return {
+      isDemo: false,
+      mode: 'enroll',
+      factorId: enrollData.id,
+      qrCode: enrollData.totp.qr_code,
+      secret: enrollData.totp.secret,
+    };
+  } catch (err: unknown) {
+    return {
+      mode: 'challenge',
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Gagal memuat status autentikasi MFA.',
+    };
+  }
+}
+
+/**
+ * Server action untuk verifikasi kode MFA (TOTP).
+ * Menerapkan penegakan ketat tanpa bypass: jika faktor tidak ditemukan atau kode salah,
+ * verifikasi ditolak dan sesi tidak dapat ditingkatkan ke AAL2.
+ */
+export async function verifyMfaAction(
+  params: string | { code: string; factorId?: string },
+): Promise<{
+  success?: boolean;
+  error?: string;
+}> {
+  const code = typeof params === 'string' ? params : params.code;
+  const factorId = typeof params === 'string' ? undefined : params.factorId;
+
+  const cleanCode = (code || '').replace(/\D/g, '').trim();
+  if (cleanCode.length !== 6) {
+    return { error: 'Kode verifikasi harus berupa 6 digit angka.' };
+  }
+
+  const cookieStore = await cookies();
+  const isDemoSession =
+    cookieStore.get('kasdapur_session')?.value === 'authenticated';
+
+  if (isDemoSession) {
+    return { success: true };
+  }
+
+  try {
+    const supabase = await createClient();
+    let targetFactorId = factorId;
+
+    if (!targetFactorId) {
+      const { data: factors, error: factorsErr } =
+        await supabase.auth.mfa.listFactors();
+      if (factorsErr) {
+        return { error: factorsErr.message };
+      }
+
+      const verifiedTotp = factors?.totp?.[0];
+      const unverifiedTotp = factors?.all?.find(
+        (f) => f.factor_type === 'totp' && f.status === 'unverified',
+      );
+      targetFactorId = verifiedTotp?.id || unverifiedTotp?.id;
+    }
+
+    if (!targetFactorId) {
+      return {
+        error:
+          'Faktor autentikasi TOTP tidak ditemukan. Silakan muat ulang halaman untuk mendaftar kembali.',
+      };
+    }
+
     const { error: verifyErr } = await supabase.auth.mfa.challengeAndVerify({
-      factorId,
-      code,
+      factorId: targetFactorId,
+      code: cleanCode,
     });
 
     if (verifyErr) {
-      return { error: verifyErr.message };
+      return {
+        error:
+          'Kode autentikator salah atau telah kedaluwarsa. Pastikan jam pada perangkat Anda sinkron.',
+      };
     }
 
     return { success: true };

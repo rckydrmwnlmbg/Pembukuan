@@ -2,18 +2,61 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { AlertCircle, ArrowLeft } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, Copy, ShieldCheck, QrCode } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
-import { verifyMfaAction } from '@/server/auth/actions';
+import { getMfaSetupAction, verifyMfaAction } from '@/server/auth/actions';
 
 export default function MfaVerificationPage() {
   const [mfaDigits, setMfaDigits] = useState(['', '', '', '', '', '']);
   const digitRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [mode, setMode] = useState<'challenge' | 'enroll'>('challenge');
+  const [factorId, setFactorId] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [secret, setSecret] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
-    digitRefs.current[0]?.focus();
+    let isMounted = true;
+
+    async function loadMfaStatus() {
+      try {
+        const setup = await getMfaSetupAction();
+        if (!isMounted) return;
+
+        if (setup.error) {
+          setErrorMsg(setup.error);
+        } else {
+          setMode(setup.mode);
+          setFactorId(setup.factorId ?? null);
+          setQrCode(setup.qrCode ?? null);
+          setSecret(setup.secret ?? null);
+        }
+      } catch (err: unknown) {
+        if (!isMounted) return;
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : 'Gagal memuat konfigurasi autentikator MFA.',
+        );
+      } finally {
+        if (isMounted) {
+          setIsInitializing(false);
+          setTimeout(() => {
+            digitRefs.current[0]?.focus();
+          }, 100);
+        }
+      }
+    }
+
+    loadMfaStatus();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   function handleDigitChange(index: number, value: string) {
@@ -48,6 +91,17 @@ export default function MfaVerificationPage() {
     digitRefs.current[focusIndex]?.focus();
   }
 
+  async function handleCopySecret() {
+    if (!secret) return;
+    try {
+      await navigator.clipboard.writeText(secret);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Abaikan jika browser tidak mengizinkan akses clipboard
+    }
+  }
+
   async function handleMfaSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
@@ -60,7 +114,11 @@ export default function MfaVerificationPage() {
 
     setIsLoading(true);
     try {
-      const result = await verifyMfaAction(code);
+      const result = await verifyMfaAction({
+        code,
+        factorId: factorId || undefined,
+      });
+
       if (result.error) {
         setIsLoading(false);
         setErrorMsg(result.error);
@@ -90,10 +148,14 @@ export default function MfaVerificationPage() {
           </Link>
         </div>
 
-        <div className="mx-auto w-full max-w-[360px] py-12">
-          <div className="mb-8">
+        <div className="mx-auto w-full max-w-[420px] py-8">
+          <div className="mb-6 flex items-center justify-between">
             <span className="font-semibold text-lg tracking-tight text-[var(--ink)]">
               Kasdapur
+            </span>
+            <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium bg-[var(--surface-muted)] text-[var(--ink-muted)] border border-[var(--line)]">
+              <ShieldCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>{mode === 'enroll' ? 'Pendaftaran Wajib' : 'Wajib MFA'}</span>
             </span>
           </div>
 
@@ -107,59 +169,131 @@ export default function MfaVerificationPage() {
             </div>
           )}
 
-          <form onSubmit={handleMfaSubmit} className="space-y-5">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
-                Masukkan kode verifikasi
-              </h1>
-              <p className="mt-1 text-xs text-[var(--ink-muted)] leading-relaxed">
-                Buka aplikasi autentikator Anda dan masukkan kode 6 digit.
-              </p>
+          {isInitializing ? (
+            <div className="space-y-4 py-8 text-center text-xs text-[var(--ink-muted)]">
+              <div className="w-8 h-8 mx-auto border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+              <p>Menyiapkan sesi autentikasi...</p>
             </div>
+          ) : (
+            <form onSubmit={handleMfaSubmit} className="space-y-5">
+              {mode === 'enroll' ? (
+                <div className="space-y-4">
+                  <div>
+                    <h1 className="text-xl font-semibold tracking-tight text-[var(--ink)]">
+                      Daftarkan Autentikator (TOTP)
+                    </h1>
+                    <p className="mt-1 text-xs text-[var(--ink-muted)] leading-relaxed">
+                      Akun Anda wajib dilindungi autentikasi dua faktor. Pindai kode QR berikut menggunakan aplikasi autentikator (seperti Google Authenticator, Microsoft Authenticator, atau Aegis).
+                    </p>
+                  </div>
 
-            {/* Enam kotak digit 44x52 (DESIGN.md §7) */}
-            <div
-              className="flex items-center justify-between gap-2"
-              onPaste={handlePaste}
-            >
-              {mfaDigits.map((digit, idx) => (
-                <input
-                  key={idx}
-                  ref={(el) => {
-                    digitRefs.current[idx] = el;
-                  }}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  aria-label={`Digit ke-${idx + 1}`}
-                  value={digit}
-                  onChange={(e) => handleDigitChange(idx, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(idx, e)}
-                  className="w-11 h-[52px] rounded-md border border-[var(--line-strong)] bg-[var(--surface)] text-center text-xl font-mono font-semibold text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] select-all"
-                />
-              ))}
-            </div>
+                  {qrCode ? (
+                    <div className="flex flex-col items-center justify-center p-4 rounded-lg border border-[var(--line)] bg-[var(--surface)]">
+                      <img
+                        src={qrCode}
+                        alt="Kode QR Pendaftaran MFA TOTP"
+                        className="w-44 h-44 object-contain"
+                      />
+                      <span className="mt-2 text-[11px] text-[var(--ink-muted)] flex items-center gap-1">
+                        <QrCode className="w-3.5 h-3.5" />
+                        Pindai dengan aplikasi autentikator
+                      </span>
+                    </div>
+                  ) : null}
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="h-10 w-full rounded-md bg-[var(--accent)] text-sm font-semibold text-[var(--ink-on-accent,#fff)] hover:bg-[var(--accent-hover)] active:bg-[var(--accent-press)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] focus:ring-offset-2 disabled:opacity-50"
-            >
-              {isLoading ? 'Memverifikasi...' : 'Verifikasi Kode'}
-            </button>
+                  {secret ? (
+                    <div>
+                      <label className="block text-[11px] font-medium text-[var(--ink-muted)] mb-1">
+                        Kunci rahasia manual (bila tidak bisa memindai QR):
+                      </label>
+                      <div className="flex items-center justify-between gap-2 p-2 rounded border border-[var(--line)] bg-[var(--surface-muted)] text-xs font-mono text-[var(--ink)]">
+                        <span className="truncate select-all">{secret}</span>
+                        <button
+                          type="button"
+                          onClick={handleCopySecret}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--line)] hover:bg-[var(--canvas)] transition-colors text-[11px] font-sans font-medium text-[var(--accent)] shrink-0"
+                        >
+                          {copied ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Tersalin</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>Salin</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
 
-            <div className="flex items-center justify-between pt-2 text-xs">
-              <Link
-                href="/login"
-                className="text-[var(--accent)] hover:underline"
+                  <div className="pt-2">
+                    <p className="text-xs font-medium text-[var(--ink)] mb-2">
+                      Masukkan 6 digit kode dari aplikasi autentikator Anda:
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <h1 className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
+                    Masukkan kode verifikasi
+                  </h1>
+                  <p className="mt-1 text-xs text-[var(--ink-muted)] leading-relaxed">
+                    Buka aplikasi autentikator Anda dan masukkan kode 6 digit.
+                  </p>
+                </div>
+              )}
+
+              {/* Enam kotak digit 44x52 (DESIGN.md §7) */}
+              <div
+                className="flex items-center justify-between gap-2"
+                onPaste={handlePaste}
               >
-                Kembali ke formulir login
-              </Link>
-              <span className="text-[var(--ink-muted)]">
-                Verifikasi Dua Langkah
-              </span>
-            </div>
-          </form>
+                {mfaDigits.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    ref={(el) => {
+                      digitRefs.current[idx] = el;
+                    }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    aria-label={`Digit ke-${idx + 1}`}
+                    value={digit}
+                    onChange={(e) => handleDigitChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(idx, e)}
+                    className="w-11 h-[52px] rounded-md border border-[var(--line-strong)] bg-[var(--surface)] text-center text-xl font-mono font-semibold text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] select-all"
+                  />
+                ))}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="h-10 w-full rounded-md bg-[var(--accent)] text-sm font-semibold text-[var(--ink-on-accent,#fff)] hover:bg-[var(--accent-hover)] active:bg-[var(--accent-press)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] focus:ring-offset-2 disabled:opacity-50"
+              >
+                {isLoading
+                  ? 'Memverifikasi...'
+                  : mode === 'enroll'
+                    ? 'Aktifkan & Masuk'
+                    : 'Verifikasi Kode'}
+              </button>
+
+              <div className="flex items-center justify-between pt-2 text-xs">
+                <Link
+                  href="/login"
+                  className="text-[var(--accent)] hover:underline"
+                >
+                  Kembali ke formulir login
+                </Link>
+                <span className="text-[var(--ink-muted)]">
+                  Verifikasi Dua Langkah
+                </span>
+              </div>
+            </form>
+          )}
         </div>
 
         <div className="text-xs text-[var(--ink-muted)]">

@@ -1,6 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
-const PUBLIC_PATHS = new Set(['/', '/login', '/login/mfa', '/api/health']);
+const PUBLIC_PATHS = new Set([
+  '/',
+  '/login',
+  '/login/mfa',
+  '/set-password',
+  '/auth/callback',
+  '/api/health',
+]);
 
 export function buildCspHeader(nonce: string, supabaseUrl?: string): string {
   let supabaseOrigin = '';
@@ -35,7 +43,7 @@ export function buildCspHeader(nonce: string, supabaseUrl?: string): string {
   ].join('; ');
 }
 
-export function middleware(request: NextRequest): NextResponse {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const csp = buildCspHeader(nonce, process.env.NEXT_PUBLIC_SUPABASE_URL);
 
@@ -52,11 +60,102 @@ export function middleware(request: NextRequest): NextResponse {
     return new NextResponse('Tidak ditemukan', { status: 404 });
   }
 
-  const response = NextResponse.next({
+  let response = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
   });
+
+  // Penegakan Autentikasi dan MFA AAL2 di tingkat Middleware (FR-F1.1 & SECURITY S-01)
+  const isProtectedPath =
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/k/') ||
+    pathname.startsWith('/api/k/');
+
+  if (isProtectedPath) {
+    const demoSession = request.cookies.get('kasdapur_session')?.value;
+    const isDemoAllowed =
+      process.env.NEXT_PUBLIC_DEMO === 'true' &&
+      process.env.APP_ENV !== 'production';
+
+    // Jika sesi demo aktif pada lingkungan pengembangan/demo
+    if (isDemoAllowed && demoSession === 'authenticated') {
+      // Izinkan sesi demo
+    } else if (
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ) {
+      try {
+        const supabase = createServerClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          {
+            cookies: {
+              getAll() {
+                return request.cookies.getAll();
+              },
+              setAll(cookiesToSet) {
+                cookiesToSet.forEach(({ name, value }) =>
+                  request.cookies.set(name, value),
+                );
+                response = NextResponse.next({
+                  request: {
+                    headers: requestHeaders,
+                  },
+                });
+                cookiesToSet.forEach(({ name, value, options }) =>
+                  response.cookies.set(name, value, options),
+                );
+              },
+            },
+          },
+        );
+
+        const {
+          data: { user },
+          error: userErr,
+        } = await supabase.auth.getUser();
+
+        if (userErr || !user) {
+          if (pathname.startsWith('/api/')) {
+            return NextResponse.json(
+              {
+                error:
+                  'Sesi tidak valid atau telah berakhir. Silakan login terlebih dahulu.',
+              },
+              { status: 401 },
+            );
+          }
+          return NextResponse.redirect(new URL('/login', request.url));
+        }
+
+        const { data: aal } =
+          await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+        if (aal?.currentLevel !== 'aal2') {
+          if (pathname.startsWith('/api/')) {
+            return NextResponse.json(
+              {
+                error:
+                  'Verifikasi autentikasi dua faktor (MFA AAL2) diperlukan.',
+              },
+              { status: 403 },
+            );
+          }
+          return NextResponse.redirect(new URL('/login/mfa', request.url));
+        }
+      } catch {
+        // Jika klien gagal menghubungi auth server pada rute terlindungi
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json(
+            { error: 'Gagal memverifikasi sesi autentikasi.' },
+            { status: 401 },
+          );
+        }
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+    }
+  }
 
   const isUploadFileRoute =
     pathname.includes('/uploads/') && pathname.endsWith('/file');
@@ -68,6 +167,7 @@ export function middleware(request: NextRequest): NextResponse {
   } else {
     response.headers.set('Content-Security-Policy', csp);
   }
+
   return response;
 }
 
