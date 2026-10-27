@@ -21,6 +21,8 @@ import {
   getExtractionEnv,
   type Extracted,
 } from '@/server/extraction/ai-extract';
+import { parseReceiptText } from '@/server/extraction/receipt-parser';
+import { extractPayloadFromPdf } from '@/server/extraction/pdf-helper';
 import {
   consistencyFlags,
   CONSISTENCY_FLAG_DESCRIPTIONS,
@@ -1162,22 +1164,44 @@ export async function processBatchUploadToSupabase(
       parserUsed = 'manual';
       fallbackReason = 'Mode ekstraksi manual aktif. Silakan isi formulir secara manual.';
     } else {
-      const rateCheck = await extractLimiter.limit(`extract:${userId}`);
-      if (!rateCheck.success) {
-        parserUsed = 'rate_limited';
-        fallbackReason = 'Batas laju ekstraksi tercapai. Silakan isi formulir secara manual.';
-      } else {
+      // 1. Ekstraksi deterministik lokal jika berkas PDF memuat teks transaksi
+      if (normalized.mediaType === 'application/pdf') {
         try {
-          extracted = await aiExtract({
-            mediaType: normalized.mediaType,
-            base64: Buffer.from(normalized.bytes).toString('base64'),
-          });
+          const pdfPayload = await extractPayloadFromPdf(normalized.bytes);
+          if (pdfPayload.text && pdfPayload.text.trim().length > 10) {
+            const localExtracted = parseReceiptText(pdfPayload.text);
+            if (localExtracted && localExtracted.txDate && localExtracted.amount) {
+              extracted = localExtracted;
+              parserUsed = 'ai';
+            }
+          }
         } catch {
-          extracted = null;
+          // Lanjut ke pemanggilan AI vision
         }
-        if (!extracted) {
-          fallbackReason =
-            'Penyedia AI tidak merespons atau berkas tidak terbaca. Silakan lengkapi formulir review secara manual.';
+      }
+
+      // 2. Jika belum terbaca, panggil aiExtract
+      if (!extracted || !extracted.txDate || !extracted.amount) {
+        const rateCheck = await extractLimiter.limit(`extract:${userId}`);
+        if (!rateCheck.success) {
+          parserUsed = 'rate_limited';
+          fallbackReason = 'Batas laju ekstraksi tercapai. Silakan isi formulir secara manual.';
+        } else {
+          try {
+            const aiResult = await aiExtract({
+              mediaType: normalized.mediaType,
+              base64: Buffer.from(normalized.bytes).toString('base64'),
+            });
+            if (aiResult) {
+              extracted = aiResult;
+            }
+          } catch {
+            extracted = null;
+          }
+          if (!extracted) {
+            fallbackReason =
+              'Penyedia AI tidak merespons atau berkas tidak terbaca. Silakan lengkapi formulir review secara manual.';
+          }
         }
       }
     }

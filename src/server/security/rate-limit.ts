@@ -66,24 +66,44 @@ function createLimiter(
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  if (url && token && !url.includes('example-synthetic')) {
-    const redis = new Redis({ url, token });
-    const rl = new Ratelimit({
-      redis,
-      prefix,
-      limiter: Ratelimit.slidingWindow(tokens, windowStr),
-    });
-    return {
-      async limit(identifier: string): Promise<RateLimitResult> {
-        const res = await rl.limit(identifier);
-        return {
-          success: res.success,
-          limit: res.limit,
-          remaining: res.remaining,
-          reset: res.reset,
-        };
-      },
-    };
+  const isDummyUrl =
+    !url ||
+    url.includes('sintetis') ||
+    url.includes('example-synthetic') ||
+    url.includes('dummy');
+  const isDummyToken = !token || token.startsWith('dummy_');
+
+  if (url && token && !isDummyUrl && !isDummyToken) {
+    try {
+      const redis = new Redis({ url, token });
+      const rl = new Ratelimit({
+        redis,
+        prefix,
+        limiter: Ratelimit.slidingWindow(tokens, windowStr),
+      });
+      return {
+        async limit(identifier: string): Promise<RateLimitResult> {
+          try {
+            const res = await rl.limit(identifier);
+            return {
+              success: res.success,
+              limit: res.limit,
+              remaining: res.remaining,
+              reset: res.reset,
+            };
+          } catch {
+            return {
+              success: true,
+              limit: tokens,
+              remaining: tokens,
+              reset: Date.now() + windowMs,
+            };
+          }
+        },
+      };
+    } catch {
+      // Fallback ke in-memory jika inisialisasi Redis gagal
+    }
   }
 
   return new InMemorySlidingWindowLimiter(tokens, windowMs);

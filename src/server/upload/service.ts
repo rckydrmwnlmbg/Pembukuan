@@ -13,6 +13,8 @@ import {
   getExtractionEnv,
   type Extracted,
 } from '@/server/extraction/ai-extract';
+import { parseReceiptText } from '@/server/extraction/receipt-parser';
+import { extractPayloadFromPdf } from '@/server/extraction/pdf-helper';
 import {
   consistencyFlags,
   CONSISTENCY_FLAG_DESCRIPTIONS,
@@ -437,20 +439,40 @@ export class UploadServiceStore {
         parserUsed = 'rate_limited';
         fallbackReason = `Batas ekstraksi harian dapur (${env.EXTRACTION_DAILY_LIMIT} berkas/hari) telah tercapai. Silakan isi formulir secara manual.`;
       } else {
-        const rateCheck = await extractLimiter.limit(`extract:${actorId}`);
-        if (!rateCheck.success) {
-          parserUsed = 'rate_limited';
-          fallbackReason =
-            'Batas laju ekstraksi pengguna tercapai. Silakan isi formulir secara manual.';
-        } else {
-          this.dailyExtractionCounts.set(dailyKey, currentDailyCount + 1);
-          extracted = await aiExtract({
-            mediaType: normalized.mediaType,
-            base64: Buffer.from(normalized.bytes).toString('base64'),
-          });
-          if (!extracted) {
+        // 1. Ekstraksi deterministik lokal jika berkas PDF memuat teks transaksi
+        if (normalized.mediaType === 'application/pdf') {
+          try {
+            const pdfPayload = await extractPayloadFromPdf(normalized.bytes);
+            if (pdfPayload.text && pdfPayload.text.trim().length > 10) {
+              const localExtracted = parseReceiptText(pdfPayload.text);
+              if (localExtracted && localExtracted.txDate && localExtracted.amount) {
+                extracted = localExtracted;
+                parserUsed = 'ai';
+                this.dailyExtractionCounts.set(dailyKey, currentDailyCount + 1);
+              }
+            }
+          } catch {
+            // Lanjut ke pemanggilan AI
+          }
+        }
+
+        // 2. Jika belum terbaca, panggil aiExtract
+        if (!extracted || !extracted.txDate || !extracted.amount) {
+          const rateCheck = await extractLimiter.limit(`extract:${actorId}`);
+          if (!rateCheck.success) {
+            parserUsed = 'rate_limited';
             fallbackReason =
-              'Berkas tidak dapat diekstrak secara otomatis atau penyedia AI tidak merespons. Silakan isi formulir secara manual.';
+              'Batas laju ekstraksi pengguna tercapai. Silakan isi formulir secara manual.';
+          } else {
+            this.dailyExtractionCounts.set(dailyKey, currentDailyCount + 1);
+            extracted = await aiExtract({
+              mediaType: normalized.mediaType,
+              base64: Buffer.from(normalized.bytes).toString('base64'),
+            });
+            if (!extracted) {
+              fallbackReason =
+                'Berkas tidak dapat diekstrak secara otomatis atau penyedia AI tidak merespons. Silakan isi formulir secara manual.';
+            }
           }
         }
       }
