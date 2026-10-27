@@ -42,10 +42,6 @@ export function DashboardSummary({
   const router = useRouter();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const hasDemo = kitchens.some(
-    (k) => k.code.startsWith('DS-') || k.id.startsWith('10000000-0000-4000-8000-'),
-  );
-
   // Kumpulkan item "Perlu tindakan" (DESIGN.md 8.2)
   const actionItems: Array<{
     id: string;
@@ -338,7 +334,6 @@ export function DashboardSummary({
       <AddKitchenModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        hasDemoData={hasDemo}
       />
     </div>
   );

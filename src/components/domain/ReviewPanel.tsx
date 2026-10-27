@@ -164,8 +164,8 @@ export function ReviewPanel({
           {upload.mime === 'application/pdf' ? (
             <div className="w-[320px] sm:w-[400px] h-[480px] bg-white text-ink flex flex-col justify-between p-6 border text-xs">
               <div className="border-b pb-3">
-                <div className="font-semibold text-sm">Bukti transfer bank (sintetis)</div>
-                <div className="text-[10px] text-gray-500">Dokumen contoh</div>
+                <div className="font-semibold text-sm">Bukti transfer bank</div>
+                <div className="text-[10px] text-gray-500">Dokumen transaksi</div>
               </div>
               <div className="space-y-3 py-4">
                 <div>Tanggal: {upload.txDate ?? '—'}</div>
@@ -175,14 +175,14 @@ export function ReviewPanel({
                 <div>Rekening: {upload.recipientAccount ?? '—'}</div>
               </div>
               <div className="text-[9px] text-gray-400 border-t pt-2">
-                Data sintetis deterministik untuk pengujian M3/M5
+                Pratinjau dokumen transfer
               </div>
             </div>
           ) : (
             <div className="w-[300px] sm:w-[380px] min-h-[440px] bg-white text-ink flex flex-col justify-between p-6 border text-xs">
               <div className="border-b pb-3">
-                <div className="font-semibold text-sm">Bukti transfer gambar (sintetis)</div>
-                <div className="text-[10px] text-gray-500">Demo sintetis</div>
+                <div className="font-semibold text-sm">Bukti transfer gambar</div>
+                <div className="text-[10px] text-gray-500">Dokumen gambar</div>
               </div>
               <div className="space-y-3 py-4">
                 <div>Tanggal: {upload.txDate ?? '—'}</div>

@@ -52,7 +52,7 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
   );
 
   async function handleClearDemo() {
-    if (!confirm('Apakah Anda yakin ingin menghapus data demo sintetis? Ini akan menyisakan ruang bersih untuk dapur asli Anda.')) {
+    if (!confirm('Apakah Anda yakin ingin menghapus data contoh? Ruang pembukuan akan dikosongkan untuk dapur Anda.')) {
       return;
     }
     setIsClearing(true);
@@ -236,7 +236,7 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
                     className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--danger)] hover:bg-[var(--danger-subtle)] transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    <span>{isClearing ? 'Membersihkan...' : 'Bersihkan Data Demo'}</span>
+                    <span>{isClearing ? 'Membersihkan...' : 'Bersihkan Dapur Contoh'}</span>
                   </button>
                 )}
               </div>
@@ -301,7 +301,6 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
       <AddKitchenModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        hasDemoData={hasDemo}
       />
     </>
   );

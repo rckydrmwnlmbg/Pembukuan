@@ -47,7 +47,7 @@ export default function HomePage() {
             Kasdapur
           </span>
           <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[11px] bg-[var(--surface-muted)] text-[var(--ink-muted)] border border-[var(--line)]">
-            Versi demo data contoh
+            Sistem Pembukuan Kas Dapur
           </span>
         </div>
 
@@ -110,10 +110,10 @@ export default function HomePage() {
             <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 overflow-hidden max-h-[460px]">
               <div className="flex items-center justify-between border-b border-[var(--line)] pb-2 mb-3">
                 <span className="text-xs font-semibold text-[var(--ink)]">
-                  Dapur Sintetis Cempaka (DS-CMP)
+                  Dapur Cempaka (DPR-CMP)
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] bg-[var(--surface-muted)] text-[var(--ink-muted)] border border-[var(--line)]">
-                  Data contoh
+                  Buku Kas Aktif
                 </span>
               </div>
 

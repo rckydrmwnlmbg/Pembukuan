@@ -107,9 +107,9 @@ function ShowcaseContent() {
             <Select
               label="Pilih Dapur Tujuan"
               options={[
-                { value: 'cmp', label: 'Dapur Sintetis Cempaka (DS-CMP)' },
-                { value: 'kng', label: 'Dapur Sintetis Kenanga (DS-KNG)' },
-                { value: 'mlt', label: 'Dapur Sintetis Melati (DS-MLT)' },
+                { value: 'cmp', label: 'Dapur Cempaka (DPR-CMP)' },
+                { value: 'kng', label: 'Dapur Kenanga (DPR-KNG)' },
+                { value: 'mlt', label: 'Dapur Melati (DPR-MLT)' },
               ]}
             />
           </div>

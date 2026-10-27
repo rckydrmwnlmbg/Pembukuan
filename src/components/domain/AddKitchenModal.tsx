@@ -8,10 +8,9 @@ import { formatRupiah } from '@/lib/format';
 interface AddKitchenModalProps {
   isOpen: boolean;
   onClose: () => void;
-  hasDemoData?: boolean;
 }
 
-export function AddKitchenModal({ isOpen, onClose, hasDemoData }: AddKitchenModalProps) {
+export function AddKitchenModal({ isOpen, onClose }: AddKitchenModalProps) {
   const router = useRouter();
 
   const [name, setName] = useState('');
@@ -21,7 +20,6 @@ export function AddKitchenModal({ isOpen, onClose, hasDemoData }: AddKitchenModa
   const [accountNo, setAccountNo] = useState('');
   const [openingBalance, setOpeningBalance] = useState('0');
   const [adminFeeDefault, setAdminFeeDefault] = useState('6500');
-  const [clearDemo, setClearDemo] = useState(hasDemoData ?? false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -54,16 +52,7 @@ export function AddKitchenModal({ isOpen, onClose, hasDemoData }: AddKitchenModa
 
     setIsLoading(true);
     try {
-      // 1. Bersihkan demo jika dipilih
-      if (clearDemo) {
-        await fetch('/api/kitchens', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'clear_demo' }),
-        });
-      }
-
-      // 2. Buat dapur baru
+      // Buat dapur baru
       const res = await fetch('/api/kitchens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -242,26 +231,6 @@ export function AddKitchenModal({ isOpen, onClose, hasDemoData }: AddKitchenModa
                 className="h-9 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-xs text-[var(--ink)] tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
               />
             </div>
-          </div>
-
-          {/* Opsi bersihkan demo */}
-          <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-muted)] p-3">
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={clearDemo}
-                onChange={(e) => setClearDemo(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-[var(--line-strong)] text-[var(--accent)] focus:ring-[var(--focus-ring)]"
-              />
-              <div className="text-xs">
-                <span className="font-semibold text-[var(--ink)]">
-                  Gunakan data murni (Hapus 5 dapur contoh sintetis)
-                </span>
-                <p className="mt-0.5 text-[11px] text-[var(--ink-muted)] leading-relaxed">
-                  Centang untuk memulai pembukuan bersih khusus dapur riil Anda tanpa data demo buatan.
-                </p>
-              </div>
-            </label>
           </div>
 
           {/* Tombol Aksi */}
