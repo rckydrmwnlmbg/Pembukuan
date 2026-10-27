@@ -100,7 +100,7 @@ export default function KitchenSettingsPage({
   const [unlockReason, setUnlockReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  async function fetchMembers() {
+  const fetchMembers = React.useCallback(async () => {
     try {
       const res = await fetch(`/api/k/${kitchenId}/members`);
       if (res.ok) {
@@ -110,7 +110,7 @@ export default function KitchenSettingsPage({
     } catch {
       // Ignore
     }
-  }
+  }, [kitchenId]);
 
   async function handleAddMember(e: React.FormEvent) {
     e.preventDefault();
@@ -230,7 +230,7 @@ export default function KitchenSettingsPage({
     }
 
     void fetchData();
-  }, [kitchenId]);
+  }, [kitchenId, fetchMembers]);
 
   async function handleSaveSettings(e: React.FormEvent) {
     e.preventDefault();
@@ -786,7 +786,11 @@ export default function KitchenSettingsPage({
               />
               <select
                 value={newMemberRole}
-                onChange={(e) => setNewMemberRole(e.target.value as any)}
+                onChange={(e) =>
+                  setNewMemberRole(
+                    e.target.value as 'admin' | 'maker' | 'approver' | 'viewer',
+                  )
+                }
                 className="sm:col-span-3 rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
               >
                 <option value="approver">Pengawas (Approver)</option>
@@ -804,7 +808,7 @@ export default function KitchenSettingsPage({
               </button>
             </div>
             <p className="text-[11px] text-[var(--ink-muted)]">
-              Catatan: Calon pengawas/maker harus sudah membuat akun di aplikasi terlebih dahulu via menu pendaftaran di halaman login.
+              Jika akun belum terdaftar, sistem akan otomatis mengirim surel undangan resmi dengan tautan untuk menetapkan kata sandi (FR-F1.3).
             </p>
           </form>
 
@@ -827,7 +831,16 @@ export default function KitchenSettingsPage({
                     <td className="px-3.5 py-2.5">
                       <select
                         value={m.role}
-                        onChange={(e) => handleUpdateMemberRole(m.userId, e.target.value as any)}
+                        onChange={(e) =>
+                          handleUpdateMemberRole(
+                            m.userId,
+                            e.target.value as
+                              | 'admin'
+                              | 'maker'
+                              | 'approver'
+                              | 'viewer',
+                          )
+                        }
                         className="rounded border border-[var(--line-strong)] bg-[var(--surface)] px-2 py-1 text-xs font-medium text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                       >
                         <option value="admin">Admin (Penuh)</option>

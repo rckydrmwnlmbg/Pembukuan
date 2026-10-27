@@ -1,4 +1,5 @@
 import { kitchenRoute } from '@/server/http/kitchen-route';
+import { headers } from 'next/headers';
 import {
   ListMembersQuerySchema,
   AddMemberBodySchema,
@@ -6,6 +7,7 @@ import {
   DeleteMemberBodySchema,
 } from '@/lib/schemas/members';
 import { createAdminClient } from '@/server/supabase/admin';
+import { inviteUserByEmail } from '@/server/admin/invite-user';
 import { HttpError } from '@/server/http/errors';
 
 export const dynamic = 'force-dynamic';
@@ -83,18 +85,27 @@ export const POST = kitchenRoute(
       (u) => (u.email || '').trim().toLowerCase() === cleanEmail,
     );
 
-    if (!targetUser) {
-      throw new HttpError(
-        404,
-        `Pengguna dengan email "${input.email}" belum terdaftar. Minta calon anggota/pengawas mendaftarkan akunnya terlebih dahulu melalui menu pendaftaran di aplikasi.`,
-      );
+    let targetUserId = targetUser?.id;
+    let isInvitedNew = false;
+
+    if (!targetUserId) {
+      // Pendaftaran publik ditutup (FR-F1.3). Kirim undangan resmi via admin invite
+      const headerList = await headers();
+      const host = headerList.get('x-forwarded-host') || headerList.get('host');
+      const proto = headerList.get('x-forwarded-proto') || 'https';
+      const origin = host ? `${proto}://${host}` : undefined;
+      const redirectUrl = origin ? `${origin}/auth/callback?next=/set-password` : undefined;
+
+      const inviteRes = await inviteUserByEmail(cleanEmail, redirectUrl);
+      targetUserId = inviteRes.userId;
+      isInvitedNew = true;
     }
 
     // Masukkan ke kitchen_members
     const { error: insErr } = await adminClient.from('kitchen_members').upsert(
       {
         kitchen_id: kitchenId,
-        user_id: targetUser.id,
+        user_id: targetUserId,
         role: input.role,
       },
       { onConflict: 'kitchen_id,user_id' },
@@ -106,7 +117,9 @@ export const POST = kitchenRoute(
 
     return Response.json({
       success: true,
-      message: `Berhasil menambahkan ${input.email} sebagai ${input.role}.`,
+      message: isInvitedNew
+        ? `Undangan resmi telah dikirim ke surel ${input.email} untuk menetapkan kata sandi (sebagai ${input.role}).`
+        : `Berhasil menambahkan ${input.email} sebagai ${input.role}.`,
     });
   },
 );

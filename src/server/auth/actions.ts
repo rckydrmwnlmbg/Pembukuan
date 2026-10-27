@@ -1,8 +1,9 @@
 'use server';
 
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { createClient } from '@/server/supabase/server';
 import { getEnv } from '@/server/env';
+import { validatePassword } from '@/lib/validation/password';
 
 /**
  * Server action untuk proses login:
@@ -76,64 +77,38 @@ export async function signInAction(formData: {
 }
 
 /**
- * Server action untuk pendaftaran akun pengguna baru di Supabase Auth.
+ * Server action untuk menetapkan kata sandi baru (bagi pengguna undangan atau ubah sandi).
+ * Menerapkan batas minimal 12 karakter dan menolak sandi lemah umum (PRD FR-F1.3).
  */
-export async function signUpAction(formData: {
-  email: string;
+export async function setPasswordAction(formData: {
   password: string;
 }): Promise<{
   success?: boolean;
   error?: string;
-  message?: string;
 }> {
-  const { email, password } = formData;
-
-  if (!email || !password) {
-    return { error: 'Email dan kata sandi wajib diisi.' };
+  const { password } = formData;
+  const validation = validatePassword(password);
+  if (!validation.valid) {
+    return { error: validation.error };
   }
-
-  if (password.length < 6) {
-    return { error: 'Kata sandi minimal 6 karakter.' };
-  }
-
-  const cleanEmail = email.trim().toLowerCase();
 
   try {
-    const headerList = await headers();
-    const host = headerList.get('x-forwarded-host') || headerList.get('host');
-    const proto = headerList.get('x-forwarded-proto') || 'https';
-    const origin = host ? `${proto}://${host}` : undefined;
-
-    const options: { emailRedirectTo?: string } = {};
-    if (origin) {
-      options.emailRedirectTo = `${origin}/auth/callback`;
-    }
-
     const supabase = await createClient();
-    const { data, error } = await supabase.auth.signUp({
-      email: cleanEmail,
+    const { error } = await supabase.auth.updateUser({
       password,
-      options,
     });
 
     if (error) {
       return { error: error.message };
     }
 
-    if (data.session) {
-      return { success: true, message: 'Pendaftaran berhasil dan Anda telah masuk!' };
-    }
-
-    return {
-      success: true,
-      message: 'Pendaftaran berhasil! Silakan masuk menggunakan akun baru Anda.',
-    };
+    return { success: true };
   } catch (err: unknown) {
     return {
       error:
         err instanceof Error
           ? err.message
-          : 'Gagal menghubungi server Supabase saat mendaftarkan akun.',
+          : 'Gagal memperbarui kata sandi di server autentikasi.',
     };
   }
 }

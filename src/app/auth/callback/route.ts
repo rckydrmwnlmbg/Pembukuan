@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
+  const next = requestUrl.searchParams.get('next') || '/dashboard';
   const origin = requestUrl.origin;
 
   if (code) {
@@ -17,13 +18,12 @@ export async function GET(request: Request) {
       const supabase = await createClient();
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (!error) {
-        return NextResponse.redirect(`${origin}/dashboard`);
+        return NextResponse.redirect(`${origin}${next}`);
       }
     } catch {
       // Abaikan dan alihkan ke login
     }
   }
 
-  // Jika kode verifikasi berhasil atau dialihkan kembali
   return NextResponse.redirect(`${origin}/login?confirmed=true`);
 }

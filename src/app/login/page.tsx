@@ -2,14 +2,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { Eye, EyeOff, AlertCircle, ArrowLeft, CheckCircle2, UserPlus, LogIn } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
-import { signInAction, signUpAction, verifyMfaAction } from '@/server/auth/actions';
+import { signInAction, verifyMfaAction } from '@/server/auth/actions';
 
 export default function LoginPage() {
   // Mode: 'credentials' -> 'mfa' -> 'success'
   const [step, setStep] = useState<'credentials' | 'mfa'>('credentials');
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
   // Credentials state
   const [email, setEmail] = useState('');
@@ -34,6 +33,8 @@ export default function LoginPage() {
       const params = new URLSearchParams(window.location.search);
       if (params.get('confirmed') === 'true') {
         setSuccessMsg('Email berhasil dikonfirmasi! Silakan masuk dengan akun Anda.');
+      } else if (params.get('password_updated') === 'true') {
+        setSuccessMsg('Kata sandi berhasil diperbarui! Silakan masuk dengan kata sandi baru Anda.');
       }
     }
   }, []);
@@ -49,23 +50,6 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-
-    if (authMode === 'register') {
-      try {
-        const result = await signUpAction({ email, password });
-        setIsLoading(false);
-        if (result.error) {
-          setErrorMsg(result.error);
-          return;
-        }
-        setSuccessMsg(result.message || 'Pendaftaran berhasil! Silakan masuk.');
-        setAuthMode('login');
-      } catch (err: unknown) {
-        setIsLoading(false);
-        setErrorMsg(err instanceof Error ? err.message : 'Terjadi galat pendaftaran.');
-      }
-      return;
-    }
 
     try {
       const result = await signInAction({ email, password });
@@ -195,47 +179,11 @@ export default function LoginPage() {
             <form onSubmit={handleCredentialsSubmit} className="space-y-4">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-[var(--ink)]">
-                  {authMode === 'login' ? 'Masuk ke Kasdapur' : 'Daftar Akun Pengguna'}
+                  Masuk ke Kasdapur
                 </h1>
                 <p className="mt-1 text-xs text-[var(--ink-muted)] leading-relaxed">
-                  {authMode === 'login'
-                    ? 'Gunakan email dan kata sandi akun Supabase Anda.'
-                    : 'Daftarkan akun staf keuangan yayasan baru di database Supabase.'}
+                  Gunakan email dan kata sandi akun Anda.
                 </p>
-              </div>
-
-              {/* Tab Toggle: Masuk vs Daftar */}
-              <div className="grid grid-cols-2 p-1 rounded-lg bg-[var(--surface-muted)] border border-[var(--line)]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode('login');
-                    setErrorMsg(null);
-                  }}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                    authMode === 'login'
-                      ? 'bg-[var(--surface)] text-[var(--accent)] shadow-2xs'
-                      : 'text-[var(--ink-muted)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Masuk</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode('register');
-                    setErrorMsg(null);
-                  }}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                    authMode === 'register'
-                      ? 'bg-[var(--surface)] text-[var(--accent)] shadow-2xs'
-                      : 'text-[var(--ink-muted)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Daftar Akun</span>
-                </button>
               </div>
 
               {/* Email */}
@@ -274,12 +222,12 @@ export default function LoginPage() {
                     id="password-input"
                     name="password"
                     type={showPassword ? 'text' : 'password'}
-                    autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+                    autoComplete="current-password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-10 w-full rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 pr-10 text-xs text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
-                    placeholder="Minimal 6 karakter"
+                    placeholder="Masukkan kata sandi"
                   />
                   <button
                     type="button"
@@ -297,15 +245,11 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="h-10 w-full rounded-lg bg-[var(--accent)] text-xs font-semibold text-white shadow-2xs hover:bg-[var(--accent-hover)] active:bg-[var(--accent-press)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] focus:ring-offset-2 disabled:opacity-50"
               >
-                {isLoading
-                  ? 'Memproses...'
-                  : authMode === 'login'
-                    ? 'Masuk ke Sistem'
-                    : 'Daftarkan Akun Baru'}
+                {isLoading ? 'Memproses...' : 'Masuk ke Sistem'}
               </button>
 
               <div className="pt-2 text-center text-[11px] text-[var(--ink-muted)] border-t border-[var(--line)]">
-                Akses terotorisasi khusus staf keuangan yayasan pengelola dapur (SPPG).
+                Akses khusus staf terotorisasi. Pendaftaran hanya melalui undangan Administrator.
               </div>
             </form>
           ) : (
