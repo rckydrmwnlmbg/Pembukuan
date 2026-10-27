@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   aiExtract,
   setMockAiExtractor,
@@ -35,6 +35,12 @@ const BASE_SPEC: SyntheticProofSpec = {
   amountFormatted: 'Rp 3.150.000',
   memo: 'Pembelian sayur organik dapur',
 };
+
+beforeEach(() => {
+  setMockAiExtractor(null);
+  process.env.EXTRACTION_MODE = 'ai';
+  process.env.EXTRACTION_DAILY_LIMIT = '200';
+});
 
 afterEach(() => {
   setMockAiExtractor(null);
