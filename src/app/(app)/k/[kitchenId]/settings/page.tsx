@@ -11,6 +11,9 @@ import {
   Save,
   CheckCircle2,
   Calendar,
+  Users,
+  UserPlus,
+  Trash2,
 } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
 import { formatRupiahNumber } from '@/lib/format';
@@ -42,6 +45,13 @@ interface KitchenSummaryData {
   outgoingCount: number;
 }
 
+interface KitchenMemberItem {
+  userId: string;
+  email: string;
+  role: 'admin' | 'maker' | 'approver' | 'viewer';
+  createdAt: string;
+}
+
 export default function KitchenSettingsPage({
   params,
 }: {
@@ -64,6 +74,16 @@ export default function KitchenSettingsPage({
     outgoingCount: 0,
   });
 
+  // Member management states
+  const [members, setMembers] = useState<KitchenMemberItem[]>([]);
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<
+    'admin' | 'maker' | 'approver' | 'viewer'
+  >('approver');
+  const [memberLoading, setMemberLoading] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
+  const [memberSuccess, setMemberSuccess] = useState<string | null>(null);
+
   // Form states
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -80,6 +100,92 @@ export default function KitchenSettingsPage({
   const [unlockReason, setUnlockReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  async function fetchMembers() {
+    try {
+      const res = await fetch(`/api/k/${kitchenId}/members`);
+      if (res.ok) {
+        const data = await res.json();
+        setMembers(data.members || []);
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  async function handleAddMember(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newMemberEmail.trim()) return;
+    setMemberLoading(true);
+    setMemberError(null);
+    setMemberSuccess(null);
+    try {
+      const res = await fetch(`/api/k/${kitchenId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: newMemberEmail.trim(),
+          role: newMemberRole,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          data.error?.message || data.error || 'Gagal menambahkan anggota.',
+        );
+      }
+      setMemberSuccess(data.message || 'Anggota berhasil ditambahkan.');
+      setNewMemberEmail('');
+      await fetchMembers();
+    } catch (err: unknown) {
+      setMemberError(err instanceof Error ? err.message : 'Terjadi galat.');
+    } finally {
+      setMemberLoading(false);
+    }
+  }
+
+  async function handleUpdateMemberRole(
+    userId: string,
+    role: 'admin' | 'maker' | 'approver' | 'viewer',
+  ) {
+    try {
+      const res = await fetch(`/api/k/${kitchenId}/members`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, role }),
+      });
+      if (res.ok) {
+        await fetchMembers();
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  async function handleDeleteMember(userId: string, email: string) {
+    if (
+      !confirm(
+        `Apakah Anda yakin ingin mencabut akses ${email} dari dapur ini?`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/k/${kitchenId}/members`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error?.message || data.error || 'Gagal menghapus anggota.');
+      } else {
+        await fetchMembers();
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -89,6 +195,7 @@ export default function KitchenSettingsPage({
         const [setRes, legRes] = await Promise.all([
           fetch(`/api/k/${kitchenId}/settings`),
           fetch(`/api/k/${kitchenId}/transactions?limit=1`),
+          fetchMembers(),
         ]);
 
         if (!setRes.ok) {
@@ -628,6 +735,123 @@ export default function KitchenSettingsPage({
             </button>
           </div>
         </form>
+
+        {/* Section: Kelola Anggota & Pengawas Dapur */}
+        <div className="bg-[var(--surface)] border border-[var(--line)] rounded-lg p-5 space-y-4">
+          <div className="border-b border-[var(--line)] pb-3 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-[var(--accent)]" />
+                <h3 className="text-sm font-semibold text-[var(--ink-base)]">
+                  Pengelola & Pengawas Dapur
+                </h3>
+              </div>
+              <p className="text-xs text-[var(--ink-muted)] mt-0.5">
+                Atur akun yang memiliki akses ke dapur ini beserta tingkat perannya (Admin, Maker, Pengawas/Approver, Viewer).
+              </p>
+            </div>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[var(--surface-muted)] text-[var(--ink)] border border-[var(--line)]">
+              {members.length} Akun
+            </span>
+          </div>
+
+          {memberSuccess && (
+            <div className="p-3 rounded-md bg-[var(--ok-subtle,#e6f4ea)] text-xs text-[var(--ok,#137333)] flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{memberSuccess}</span>
+            </div>
+          )}
+
+          {memberError && (
+            <div className="p-3 rounded-md bg-[var(--danger-subtle,#fce8e6)] text-xs text-[var(--danger,#c5221f)] flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{memberError}</span>
+            </div>
+          )}
+
+          {/* Form Tambah Anggota */}
+          <form onSubmit={handleAddMember} className="p-3.5 rounded-lg border border-[var(--line)] bg-[var(--surface-muted)] space-y-3">
+            <div className="text-xs font-semibold text-[var(--ink)] flex items-center gap-1.5">
+              <UserPlus className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>Beri Akses ke Akun Terdaftar</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+              <input
+                type="email"
+                required
+                placeholder="Email akun (misal: pengawas@yayasan.org)"
+                value={newMemberEmail}
+                onChange={(e) => setNewMemberEmail(e.target.value)}
+                className="sm:col-span-6 rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              />
+              <select
+                value={newMemberRole}
+                onChange={(e) => setNewMemberRole(e.target.value as any)}
+                className="sm:col-span-3 rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              >
+                <option value="approver">Pengawas (Approver)</option>
+                <option value="maker">Maker (Staf Keuangan)</option>
+                <option value="viewer">Viewer (Hanya Baca)</option>
+                <option value="admin">Admin (Pemilik Dapur)</option>
+              </select>
+              <button
+                type="submit"
+                disabled={memberLoading}
+                className="sm:col-span-3 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--accent)] text-xs font-semibold text-[var(--ink-on-accent,#fff)] hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>{memberLoading ? 'Menambahkan...' : 'Tambah Akses'}</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-[var(--ink-muted)]">
+              Catatan: Calon pengawas/maker harus sudah membuat akun di aplikasi terlebih dahulu via menu pendaftaran di halaman login.
+            </p>
+          </form>
+
+          {/* Tabel Daftar Anggota */}
+          <div className="overflow-x-auto rounded-lg border border-[var(--line)]">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-[var(--surface-muted)] text-[var(--ink-muted)] border-b border-[var(--line)]">
+                <tr>
+                  <th className="px-3.5 py-2 font-medium">Email Akun</th>
+                  <th className="px-3.5 py-2 font-medium">Peran (Role)</th>
+                  <th className="px-3.5 py-2 font-medium text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--line)]">
+                {members.map((m) => (
+                  <tr key={m.userId} className="hover:bg-[var(--surface-muted)] transition-colors">
+                    <td className="px-3.5 py-2.5 font-medium text-[var(--ink)]">
+                      {m.email}
+                    </td>
+                    <td className="px-3.5 py-2.5">
+                      <select
+                        value={m.role}
+                        onChange={(e) => handleUpdateMemberRole(m.userId, e.target.value as any)}
+                        className="rounded border border-[var(--line-strong)] bg-[var(--surface)] px-2 py-1 text-xs font-medium text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                      >
+                        <option value="admin">Admin (Penuh)</option>
+                        <option value="maker">Maker (Operasional)</option>
+                        <option value="approver">Pengawas (Approver)</option>
+                        <option value="viewer">Viewer (Baca Saja)</option>
+                      </select>
+                    </td>
+                    <td className="px-3.5 py-2.5 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMember(m.userId, m.email)}
+                        title="Hapus Akses"
+                        className="p-1 rounded text-[var(--danger)] hover:bg-[var(--danger-subtle,#fce8e6)] transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         {/* Modal Konfirmasi Kunci Periode */}
         {showLockModal && (

@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { UploadCloud, FileSpreadsheet } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { UploadCloud, FileSpreadsheet, Calendar } from 'lucide-react';
 import {
   formatTxDate,
   formatLedgerCellAmount,
@@ -58,8 +59,17 @@ export interface SerializedKitchenInfo {
   periodStatus: 'open' | 'locked';
 }
 
+export interface SerializedPeriodOption {
+  id: string;
+  year: number;
+  month: number;
+  status: 'open' | 'locked';
+  label: string;
+}
+
 export interface LedgerWorkspaceProps {
   kitchen: SerializedKitchenInfo;
+  availablePeriods?: SerializedPeriodOption[];
   initialRows: readonly SerializedLedgerRow[];
   initialSummary: SerializedPeriodSummary;
   reviewQueueCount?: number;
@@ -105,10 +115,12 @@ function getOpeningRowDescription(year: number, month: number): string {
 
 export function LedgerWorkspace({
   kitchen,
+  availablePeriods = [],
   initialRows,
   initialSummary,
   reviewQueueCount = 0,
 }: LedgerWorkspaceProps) {
+  const router = useRouter();
   const [rows, setRows] = useState< readonly SerializedLedgerRow[]>(initialRows);
   const [summary, setSummary] =
     useState<SerializedPeriodSummary>(initialSummary);
@@ -399,6 +411,25 @@ export function LedgerWorkspace({
             <Badge tone={isLocked ? 'neutral' : 'accent'}>
               {isLocked ? 'Periode Terkunci' : 'Periode Terbuka'}
             </Badge>
+
+            {availablePeriods.length > 1 && (
+              <div className="flex items-center gap-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface-muted)] px-2.5 py-1">
+                <Calendar className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
+                <span className="text-[11px] font-medium text-[var(--ink-muted)]">Pilih Periode:</span>
+                <select
+                  value={kitchen.periodId}
+                  onChange={(e) => router.push(`/k/${kitchen.id}/ledger?periodId=${e.target.value}`)}
+                  aria-label="Pilih Periode Pembukuan"
+                  className="bg-transparent text-xs font-semibold text-[var(--ink)] focus:outline-none cursor-pointer"
+                >
+                  {availablePeriods.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label} {p.status === 'locked' ? '(Terkunci)' : '(Aktif)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
             Buku kas {kitchen.periodLabel} &bull; PJ: <span className="font-semibold text-[var(--ink)]">{kitchen.pjName}</span> &bull; Rekening {kitchen.bankName} {kitchen.accountNumberMasked} &bull; Biaya admin{' '}

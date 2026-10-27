@@ -19,18 +19,51 @@ export const dynamic = 'force-dynamic';
 
 interface LedgerPageProps {
   params: Promise<{ kitchenId: string }>;
+  searchParams?: Promise<{ periodId?: string }>;
 }
 
-export default async function KitchenLedgerPage({ params }: LedgerPageProps) {
+export default async function KitchenLedgerPage({
+  params,
+  searchParams,
+}: LedgerPageProps) {
   const { kitchenId } = await params;
+  const { periodId: selectedPeriodId } = (await searchParams) ?? {};
   const { user, supabase } = await requireUser();
 
   let ledgerData;
+  let availablePeriods: Array<{
+    id: string;
+    year: number;
+    month: number;
+    status: 'open' | 'locked';
+    label: string;
+  }> = [];
 
   // 1. Ambil dari database Supabase nyata
   if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
     try {
-      ledgerData = await getSupabaseKitchenLedger(supabase, kitchenId);
+      const { data: pList } = await supabase
+        .from('periods')
+        .select('id, year, month, status')
+        .eq('kitchen_id', kitchenId)
+        .order('year', { ascending: false })
+        .order('month', { ascending: false });
+
+      if (pList && pList.length > 0) {
+        availablePeriods = pList.map((p) => ({
+          id: p.id,
+          year: p.year,
+          month: p.month,
+          status: p.status as 'open' | 'locked',
+          label: formatPeriodLabel(p.year, p.month),
+        }));
+      }
+
+      ledgerData = await getSupabaseKitchenLedger(
+        supabase,
+        kitchenId,
+        selectedPeriodId,
+      );
     } catch {
       // Abaikan jika belum ada di database nyata
     }
@@ -39,7 +72,9 @@ export default async function KitchenLedgerPage({ params }: LedgerPageProps) {
   // 2. Fallback in-memory jika mode demo/test
   if (!ledgerData) {
     try {
-      ledgerData = defaultLedgerStore.getKitchenLedger(kitchenId);
+      ledgerData = defaultLedgerStore.getKitchenLedger(kitchenId, {
+        periodId: selectedPeriodId,
+      });
     } catch {
       notFound();
     }
@@ -49,6 +84,18 @@ export default async function KitchenLedgerPage({ params }: LedgerPageProps) {
     ledgerData.kitchen.year,
     ledgerData.kitchen.month,
   );
+
+  if (availablePeriods.length === 0) {
+    availablePeriods = [
+      {
+        id: ledgerData.kitchen.periodId,
+        year: ledgerData.kitchen.year,
+        month: ledgerData.kitchen.month,
+        status: ledgerData.kitchen.periodStatus,
+        label: periodLabel,
+      },
+    ];
+  }
 
   const serializedKitchen: SerializedKitchenInfo = {
     id: ledgerData.kitchen.id,
@@ -120,6 +167,7 @@ export default async function KitchenLedgerPage({ params }: LedgerPageProps) {
     <main className="space-y-5">
       <LedgerWorkspace
         kitchen={serializedKitchen}
+        availablePeriods={availablePeriods}
         initialRows={serializedRows}
         initialSummary={serializedSummary}
         reviewQueueCount={reviewQueueCount}
