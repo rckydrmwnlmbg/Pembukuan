@@ -1934,3 +1934,57 @@ export async function postSupabaseReviewedUpload(
     savedRule,
   };
 }
+
+/**
+ * Menolak dan menghapus berkas bukti transfer yang belum diposting dari Supabase.
+ */
+export async function deleteSupabaseUpload(
+  supabase: SupabaseClient,
+  kitchenId: string,
+  uploadId: string,
+): Promise<{ uploadId: string; storagePath: string }> {
+  const { data: uploadRow, error: fetchErr } = await supabase
+    .from('uploads')
+    .select('id, kitchen_id, status, storage_path')
+    .eq('id', uploadId)
+    .eq('kitchen_id', kitchenId)
+    .single();
+
+  if (fetchErr || !uploadRow) {
+    throw new HttpError(404, 'Bukti transfer tidak ditemukan.');
+  }
+
+  if (uploadRow.status === 'posted') {
+    throw new HttpError(
+      400,
+      'Berkas yang sudah diposting ke transaksi tidak dapat dihapus dari antrean review.',
+    );
+  }
+
+  const { error: delErr } = await supabase
+    .from('uploads')
+    .delete()
+    .eq('id', uploadId)
+    .eq('kitchen_id', kitchenId);
+
+  if (delErr) {
+    throw new HttpError(500, `Gagal menghapus berkas unggahan: ${delErr.message}`);
+  }
+
+  // Hapus dari Supabase Storage jika ada
+  try {
+    const admin = createAdminClient();
+    await admin.storage.from('uploads').remove([uploadRow.storage_path]);
+  } catch {
+    // Abaikan jika storage remove gagal atau tidak ada
+  }
+
+  // Hapus juga dari cache lokal jika ada
+  try {
+    defaultUploadStore.deleteUpload(kitchenId, uploadId);
+  } catch {
+    // Abaikan jika tidak ada di store lokal
+  }
+
+  return { uploadId, storagePath: uploadRow.storage_path };
+}

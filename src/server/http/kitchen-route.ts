@@ -70,12 +70,21 @@ export function kitchenRoute<TShape extends z.ZodRawShape>(
         );
       }
 
-      const raw =
-        req.method === 'GET' || req.method === 'HEAD'
-          ? Object.fromEntries(new URL(req.url).searchParams)
-          : await req.json().catch(() => {
-              throw new HttpError(400, 'Format body JSON tidak valid.');
-            });
+      let raw: unknown;
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        raw = Object.fromEntries(new URL(req.url).searchParams);
+      } else {
+        const text = await req.text();
+        if (!text.trim()) {
+          raw = {};
+        } else {
+          try {
+            raw = JSON.parse(text);
+          } catch {
+            throw new HttpError(400, 'Format body JSON tidak valid.');
+          }
+        }
+      }
 
       const input = schema.strict().parse(raw);
 

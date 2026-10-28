@@ -755,6 +755,32 @@ export class UploadServiceStore {
       savedRule,
     };
   }
+
+  /**
+   * Menolak dan menghapus berkas bukti transfer dari antrean review.
+   * Menolak bila bukti transfer sudah diposting ke transaksi.
+   */
+  public deleteUpload(kitchenId: string, uploadId: string): void {
+    const upload = this.getKitchenUploadOrThrow(kitchenId, uploadId);
+    if (upload.status === 'posted') {
+      throw new HttpError(
+        400,
+        'Berkas yang sudah diposting ke transaksi tidak dapat dihapus dari antrean review.',
+      );
+    }
+
+    this.uploads.delete(uploadId);
+    this.fileBytesStore.delete(upload.storagePath);
+
+    logger.info(
+      {
+        uploadId,
+        kitchenId,
+        originalName: upload.originalName,
+      },
+      'upload_rejected_and_deleted',
+    );
+  }
 }
 
 export const defaultUploadStore = new UploadServiceStore(defaultLedgerStore);

@@ -60,6 +60,8 @@ export function ReviewWorkspace({
   const [isPayrollMassal, setIsPayrollMassal] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -192,6 +194,52 @@ export function ReviewWorkspace({
       setErrorMessage('Gagal menghubungi server saat menyimpan transaksi.');
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleRejectSubmit() {
+    if (!activeItem) return;
+
+    setErrorMessage(null);
+    setIsRejecting(true);
+
+    try {
+      const res = await fetch(
+        `/api/k/${kitchen.id}/uploads/${activeItem.id}`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        },
+      );
+
+      const data = (await res.json()) as {
+        error?: string | { message?: string };
+      };
+
+      if (!res.ok) {
+        const msg =
+          typeof data.error === 'string'
+            ? data.error
+            : (data.error?.message ??
+              'Gagal menolak dan menghapus berkas dari antrean.');
+        setErrorMessage(msg);
+        return;
+      }
+
+      setToastMessage(
+        `Berkas "${activeItem.originalName}" ditolak dan dihapus dari antrean.`,
+      );
+      setShowRejectConfirm(false);
+      const nextQueue = queue.filter((u) => u.id !== activeItem.id);
+      setQueue(nextQueue);
+      setActiveIndex((prev) =>
+        nextQueue.length === 0 ? 0 : Math.min(prev, nextQueue.length - 1),
+      );
+    } catch {
+      setErrorMessage('Gagal menghubungi server saat menolak berkas.');
+    } finally {
+      setIsRejecting(false);
     }
   }
 
@@ -747,6 +795,14 @@ export function ReviewWorkspace({
 
               <div className="flex items-center gap-2.5">
                 <Button
+                  type="button"
+                  variant="danger"
+                  disabled={isSubmitting || isRejecting}
+                  onClick={() => setShowRejectConfirm(true)}
+                >
+                  Tolak Berkas
+                </Button>
+                <Button
                   variant="secondary"
                   disabled={queue.length <= 1}
                   onClick={() =>
@@ -760,7 +816,7 @@ export function ReviewWorkspace({
                   form="review-post-form"
                   variant="primary"
                   disabled={
-                    isSubmitting || kitchen.periodStatus === 'locked'
+                    isSubmitting || isRejecting || kitchen.periodStatus === 'locked'
                   }
                 >
                   {isSubmitting ? 'Menyimpan...' : 'Simpan dan lanjut'}
@@ -768,6 +824,50 @@ export function ReviewWorkspace({
               </div>
             </div>
           </div>
+
+          {/* Modal Konfirmasi Tolak Berkas */}
+          {showRejectConfirm && activeItem && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+              <div className="w-full max-w-md rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl space-y-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-[var(--danger,#c5221f)]">
+                    Tolak dan Hapus Berkas dari Antrean?
+                  </h3>
+                  <p className="text-xs text-[var(--ink-muted)] truncate" title={activeItem.originalName}>
+                    {activeItem.originalName}
+                  </p>
+                </div>
+
+                <p className="text-xs text-[var(--ink-secondary)] leading-relaxed">
+                  Berkas ini akan disingkirkan dari antrean review dan{' '}
+                  <strong className="text-[var(--ink-primary)]">
+                    tidak akan dicatat ke buku kas
+                  </strong>
+                  . Tindakan ini berguna untuk membersihkan berkas yang salah unggah, buram, atau tidak valid.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 border-t border-[var(--line)] pt-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={isRejecting}
+                    onClick={() => setShowRejectConfirm(false)}
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={isRejecting}
+                    loading={isRejecting}
+                    onClick={() => void handleRejectSubmit()}
+                  >
+                    {isRejecting ? 'Menghapus...' : 'Ya, Tolak Berkas'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
