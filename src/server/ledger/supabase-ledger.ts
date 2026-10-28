@@ -1961,7 +1961,8 @@ export async function deleteSupabaseUpload(
     );
   }
 
-  const { error: delErr } = await supabase
+  const admin = createAdminClient();
+  const { error: delErr } = await admin
     .from('uploads')
     .delete()
     .eq('id', uploadId)
@@ -1973,7 +1974,6 @@ export async function deleteSupabaseUpload(
 
   // Hapus dari Supabase Storage jika ada
   try {
-    const admin = createAdminClient();
     await admin.storage.from('uploads').remove([uploadRow.storage_path]);
   } catch {
     // Abaikan jika storage remove gagal atau tidak ada

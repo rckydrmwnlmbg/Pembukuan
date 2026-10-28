@@ -1037,4 +1037,11 @@ export class LedgerServiceStore {
   }
 }
 
-export const defaultLedgerStore = new LedgerServiceStore();
+const globalForLedger = globalThis as unknown as {
+  defaultLedgerStore?: LedgerServiceStore;
+};
+
+export const defaultLedgerStore =
+  globalForLedger.defaultLedgerStore ?? new LedgerServiceStore();
+
+globalForLedger.defaultLedgerStore = defaultLedgerStore;

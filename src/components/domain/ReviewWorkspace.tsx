@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -28,9 +29,14 @@ export function ReviewWorkspace({
   kitchen,
   initialUploads,
 }: ReviewWorkspaceProps) {
+  const router = useRouter();
   const [queue, setQueue] = useState<UploadRecord[]>(
     initialUploads.filter((u) => u.status !== 'posted'),
   );
+
+  useEffect(() => {
+    setQueue(initialUploads.filter((u) => u.status !== 'posted'));
+  }, [initialUploads]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [mobileTab, setMobileTab] = useState<'file' | 'form'>('form');
 
@@ -131,6 +137,7 @@ export function ReviewWorkspace({
     setToastMessage(
       `${newRecords.length} berkas bukti transfer ditambahkan ke antrean review.`,
     );
+    router.refresh();
   }
 
   async function handlePostSubmit(e: React.FormEvent) {
@@ -190,6 +197,7 @@ export function ReviewWorkspace({
       setActiveIndex((prev) =>
         nextQueue.length === 0 ? 0 : Math.min(prev, nextQueue.length - 1),
       );
+      router.refresh();
     } catch {
       setErrorMessage('Gagal menghubungi server saat menyimpan transaksi.');
     } finally {
@@ -236,6 +244,7 @@ export function ReviewWorkspace({
       setActiveIndex((prev) =>
         nextQueue.length === 0 ? 0 : Math.min(prev, nextQueue.length - 1),
       );
+      router.refresh();
     } catch {
       setErrorMessage('Gagal menghubungi server saat menolak berkas.');
     } finally {

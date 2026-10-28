@@ -109,6 +109,7 @@ function computeAccountHash(cleanDigits: string): string {
  */
 export class UploadServiceStore {
   private readonly uploads = new Map<string, UploadRecord>();
+  private readonly deletedUploadIds = new Set<string>();
   private readonly fileBytesStore = new Map<string, Uint8Array>();
   private readonly counterpartyRules = new Map<string, CounterpartyRuleRecord>();
   private readonly dailyExtractionCounts = new Map<string, number>();
@@ -154,6 +155,7 @@ export class UploadServiceStore {
 
     // Muat antrean draf & needs_manual sintetis dari demo dataset
     for (const demoUpl of dataset.uploads) {
+      if (this.deletedUploadIds.has(demoUpl.id)) continue;
       const kitchenMeta = this.ledgerStore
         .listKitchenMeta()
         .find((k) => k.id === demoUpl.kitchenId);
@@ -266,6 +268,7 @@ export class UploadServiceStore {
     const items: UploadRecord[] = [];
     for (const u of this.uploads.values()) {
       if (u.kitchenId !== kitchenId) continue;
+      if (this.deletedUploadIds.has(u.id)) continue;
       if (statusFilter === 'reviewable') {
         if (u.status !== 'parsed' && u.status !== 'needs_manual') continue;
       } else if (statusFilter !== 'all' && u.status !== statusFilter) {
@@ -769,6 +772,7 @@ export class UploadServiceStore {
       );
     }
 
+    this.deletedUploadIds.add(uploadId);
     this.uploads.delete(uploadId);
     this.fileBytesStore.delete(upload.storagePath);
 
@@ -783,4 +787,11 @@ export class UploadServiceStore {
   }
 }
 
-export const defaultUploadStore = new UploadServiceStore(defaultLedgerStore);
+const globalForUpload = globalThis as unknown as {
+  defaultUploadStore?: UploadServiceStore;
+};
+
+export const defaultUploadStore =
+  globalForUpload.defaultUploadStore ?? new UploadServiceStore(defaultLedgerStore);
+
+globalForUpload.defaultUploadStore = defaultUploadStore;
