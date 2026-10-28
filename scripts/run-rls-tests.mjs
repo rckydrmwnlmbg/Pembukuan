@@ -157,6 +157,12 @@ export function verifyRlsMigrationsAndTests(rootDir = ROOT_DIR) {
       'bbbbbbbb-0002-4002-8002-000000000002',
       'search_transactions',
       'P0001',
+      'public.uploads',
+      'public.periods',
+      'public.bank_accounts',
+      'public.kitchen_members',
+      'public.audit_logs',
+      'storage.objects',
     ];
     for (const needle of requiredAssertions) {
       if (!testSql.includes(needle)) {

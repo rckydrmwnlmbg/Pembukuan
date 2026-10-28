@@ -40,6 +40,12 @@ declare
   v_period_b uuid := 'bbbbbbbb-1002-4002-8002-000000000002';
   v_tx_a uuid := 'aaaaaaaa-2001-4001-8001-000000000001';
   v_tx_b uuid := 'bbbbbbbb-2002-4002-8002-000000000002';
+  v_bank_a uuid := 'aaaaaaaa-3001-4001-8001-000000000001';
+  v_bank_b uuid := 'bbbbbbbb-3002-4002-8002-000000000002';
+  v_upload_a uuid := 'aaaaaaaa-5001-4001-8001-000000000001';
+  v_upload_b uuid := 'bbbbbbbb-5002-4002-8002-000000000002';
+  v_audit_a uuid := 'aaaaaaaa-6001-4001-8001-000000000001';
+  v_audit_b uuid := 'bbbbbbbb-6002-4002-8002-000000000002';
 begin
   insert into auth.users (id, email) values
     (v_user_a, 'maker.a@sintetis.example'),
@@ -73,6 +79,27 @@ begin
   ) values
     (v_tx_a, v_kitchen_a, v_period_a, 1, '2026-03-02', 'outgoing', '20260302ALFA01', 'Belanja bahan sintetis Alfa', 0, 1500000, 'posted', v_user_a),
     (v_tx_b, v_kitchen_b, v_period_b, 1, '2026-03-02', 'outgoing', '20260302BETA01', 'Belanja bahan sintetis Beta', 0, 2500000, 'posted', v_user_b);
+
+  insert into public.bank_accounts (
+    id, kitchen_id, bank_code, label, account_no_enc, account_no_hash, account_no_last4, kind
+  ) values
+    (v_bank_a, v_kitchen_a, 'BCA', 'Rekening Alfa', 'enc_a', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '1234', 'operasional'),
+    (v_bank_b, v_kitchen_b, 'BCA', 'Rekening Beta', 'enc_b', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '5678', 'operasional')
+  on conflict (kitchen_id) do nothing;
+
+  insert into public.uploads (
+    id, kitchen_id, period_id, kind, storage_path, original_name, mime, size_bytes, sha256, status, uploaded_by
+  ) values
+    (v_upload_a, v_kitchen_a, v_period_a, 'transfer_proof', 'aaaaaaaa-0001-4001-8001-000000000001/a.pdf', 'bukti_a.pdf', 'application/pdf', 1024, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'uploaded', v_user_a),
+    (v_upload_b, v_kitchen_b, v_period_b, 'transfer_proof', 'bbbbbbbb-0002-4002-8002-000000000002/b.pdf', 'bukti_b.pdf', 'application/pdf', 1024, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'uploaded', v_user_b)
+  on conflict (id) do nothing;
+
+  insert into public.audit_logs (
+    id, kitchen_id, actor_id, action, entity, entity_id
+  ) values
+    (v_audit_a, v_kitchen_a, v_user_a, 'tx.create', 'transactions', v_tx_a),
+    (v_audit_b, v_kitchen_b, v_user_b, 'tx.create', 'transactions', v_tx_b)
+  on conflict (id) do nothing;
 end $$;
 
 -- 3. Uji sebagai user_a (maker di Dapur A)
@@ -140,6 +167,177 @@ begin
 
   if v_deleted <> 0 then
     raise exception 'SECURITY S-02 GAGAL: DELETE pada transactions seharusnya 0 baris, terhapus %', v_deleted;
+  end if;
+
+  -- ==========================================================================
+  -- Uji Isolasi Menyeluruh Seluruh Tabel Domain & Storage (Tugas 6 & AGENTS.md #1)
+  -- ==========================================================================
+
+  -- 3f. Isolasi uploads: user_a tidak boleh baca/tulis upload Dapur B
+  select count(*) into v_count_b
+  from public.uploads
+  where kitchen_id = 'bbbbbbbb-0002-4002-8002-000000000002';
+
+  if v_count_b <> 0 then
+    raise exception 'SECURITY S-02 GAGAL: user_a dapat membaca % baris uploads Dapur B', v_count_b;
+  end if;
+
+  v_rls_blocked := false;
+  begin
+    insert into public.uploads (
+      kitchen_id, period_id, kind, storage_path, original_name, mime, size_bytes, sha256, status, uploaded_by
+    ) values (
+      'bbbbbbbb-0002-4002-8002-000000000002',
+      'bbbbbbbb-1002-4002-8002-000000000002',
+      'transfer_proof',
+      'bbbbbbbb-0002-4002-8002-000000000002/hack.pdf',
+      'hack.pdf', 'application/pdf', 512,
+      'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+      'uploaded', '11111111-1111-4111-8111-111111111111'
+    );
+  exception when others then
+    v_rls_blocked := true;
+  end;
+
+  if not v_rls_blocked then
+    raise exception 'SECURITY S-02 GAGAL: user_a berhasil INSERT uploads ke Dapur B';
+  end if;
+
+  update public.uploads
+     set status = 'needs_manual'
+   where kitchen_id = 'bbbbbbbb-0002-4002-8002-000000000002';
+  get diagnostics v_updated = row_count;
+  if v_updated <> 0 then
+    raise exception 'SECURITY S-02 GAGAL: user_a berhasil UPDATE uploads Dapur B';
+  end if;
+
+  -- 3g. Isolasi periods: user_a tidak boleh baca/tulis period Dapur B
+  select count(*) into v_count_b
+  from public.periods
+  where kitchen_id = 'bbbbbbbb-0002-4002-8002-000000000002';
+
+  if v_count_b <> 0 then
+    raise exception 'SECURITY S-02 GAGAL: user_a dapat membaca % baris periods Dapur B', v_count_b;
+  end if;
+
+  v_rls_blocked := false;
+  begin
+    insert into public.periods (
+      kitchen_id, year, month, opening_balance, status
+    ) values (
+      'bbbbbbbb-0002-4002-8002-000000000002',
+      2026, 4, 10000, 'open'
+    );
+  exception when others then
+    v_rls_blocked := true;
+  end;
+
+  if not v_rls_blocked then
+    raise exception 'SECURITY S-02 GAGAL: user_a berhasil INSERT periods ke Dapur B';
+  end if;
+
+  update public.periods
+     set opening_balance = 0
+   where kitchen_id = 'bbbbbbbb-0002-4002-8002-000000000002';
+  get diagnostics v_updated = row_count;
+  if v_updated <> 0 then
+    raise exception 'SECURITY S-02 GAGAL: user_a berhasil UPDATE periods Dapur B';
+  end if;
+
+  -- 3h. Isolasi bank_accounts: user_a tidak boleh baca/tulis rekening bank Dapur B
+  select count(*) into v_count_b
+  from public.bank_accounts
+  where kitchen_id = 'bbbbbbbb-0002-4002-8002-000000000002';
+
+  if v_count_b <> 0 then
+    raise exception 'SECURITY S-02 GAGAL: user_a dapat membaca % baris bank_accounts Dapur B', v_count_b;
+  end if;
+
+  v_rls_blocked := false;
+  begin
+    insert into public.bank_accounts (
+      kitchen_id, bank_code, label, account_no_enc, account_no_hash, account_no_last4
+    ) values (
+      'bbbbbbbb-0002-4002-8002-000000000002',
+      'BRI', 'Rekening Bajakan', 'enc_hack',
+      'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', '9999'
+    );
+  exception when others then
+    v_rls_blocked := true;
+  end;
+
+  if not v_rls_blocked then
+    raise exception 'SECURITY S-02 GAGAL: user_a berhasil INSERT bank_accounts ke Dapur B';
+  end if;
+
+  -- 3i. Isolasi kitchen_members: user_a tidak boleh baca/tulis keanggotaan Dapur B
+  select count(*) into v_count_b
+  from public.kitchen_members
+  where kitchen_id = 'bbbbbbbb-0002-4002-8002-000000000002';
+
+  if v_count_b <> 0 then
+    raise exception 'SECURITY S-02 GAGAL: user_a dapat membaca % anggota Dapur B', v_count_b;
+  end if;
+
+  v_rls_blocked := false;
+  begin
+    insert into public.kitchen_members (kitchen_id, user_id, role)
+    values ('bbbbbbbb-0002-4002-8002-000000000002', '11111111-1111-4111-8111-111111111111', 'admin');
+  exception when others then
+    v_rls_blocked := true;
+  end;
+
+  if not v_rls_blocked then
+    raise exception 'SECURITY S-02 GAGAL: user_a berhasil INSERT dirinya ke Dapur B';
+  end if;
+
+  -- 3j. Isolasi audit_logs: user_a tidak boleh baca/tulis audit log Dapur B
+  select count(*) into v_count_b
+  from public.audit_logs
+  where kitchen_id = 'bbbbbbbb-0002-4002-8002-000000000002';
+
+  if v_count_b <> 0 then
+    raise exception 'SECURITY S-02 GAGAL: user_a dapat membaca % audit_logs Dapur B', v_count_b;
+  end if;
+
+  v_rls_blocked := false;
+  begin
+    insert into public.audit_logs (kitchen_id, actor_id, action, entity, entity_id)
+    values (
+      'bbbbbbbb-0002-4002-8002-000000000002',
+      '11111111-1111-4111-8111-111111111111',
+      'hack.action', 'kitchens', 'bbbbbbbb-0002-4002-8002-000000000002'
+    );
+  exception when others then
+    v_rls_blocked := true;
+  end;
+
+  if not v_rls_blocked then
+    raise exception 'SECURITY S-02 GAGAL: user_a berhasil INSERT audit_logs ke Dapur B';
+  end if;
+
+  -- 3k. Isolasi Storage (SECURITY S-03): user_a dilarang membaca atau menulis berkas Dapur B
+  if exists (select 1 from information_schema.tables where table_schema = 'storage' and table_name = 'objects') then
+    select count(*) into v_count_b
+    from storage.objects
+    where bucket_id = 'uploads'
+      and name like 'bbbbbbbb-0002-4002-8002-000000000002/%';
+
+    if v_count_b <> 0 then
+      raise exception 'SECURITY S-03 GAGAL: user_a dapat membaca berkas storage Dapur B';
+    end if;
+
+    v_rls_blocked := false;
+    begin
+      insert into storage.objects (bucket_id, name)
+      values ('uploads', 'bbbbbbbb-0002-4002-8002-000000000002/exploit.pdf');
+    exception when others then
+      v_rls_blocked := true;
+    end;
+
+    if not v_rls_blocked then
+      raise exception 'SECURITY S-03 GAGAL: user_a berhasil mengunggah berkas ke folder Dapur B';
+    end if;
   end if;
 end $$;
 

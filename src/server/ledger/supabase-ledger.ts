@@ -93,8 +93,35 @@ export async function listUserKitchens(
 
   const kitchenIds = members.map((m) => m.kitchen_id);
 
-  // 2. Ambil data dapur, rekening bank, dan periode aktif
-  const [kitchensRes, bankRes, periodsRes, uploadsRes] = await Promise.all([
+  interface RawKitchen {
+    id: string;
+    code: string;
+    name: string;
+    pj_name: string;
+    admin_fee_default?: number;
+    high_amount_threshold?: number;
+  }
+  interface RawBank {
+    kitchen_id: string;
+    bank_code: string;
+    account_no_last4: string;
+  }
+  interface RawPeriod {
+    id: string;
+    kitchen_id: string;
+    year: number;
+    month: number;
+    opening_balance: number | string;
+    status: string;
+  }
+  interface RawUpload {
+    kitchen_id: string;
+    status: string;
+    created_at: string;
+  }
+
+  // 2. Ambil data dapur, rekening bank, periode aktif, upload tertunda, dan view saldo periode secara paralel
+  const [kitchensRes, bankRes, periodsRes, uploadsRes, summaryRes] = await Promise.all([
     supabase.from('kitchens').select('*').in('id', kitchenIds),
     supabase.from('bank_accounts').select('*').in('kitchen_id', kitchenIds),
     supabase
@@ -108,18 +135,51 @@ export async function listUserKitchens(
       .select('kitchen_id, status, created_at')
       .in('kitchen_id', kitchenIds)
       .in('status', ['uploaded', 'needs_manual']),
+    Promise.resolve(
+      supabase
+        .from('v_period_summary')
+        .select('*')
+        .in('kitchen_id', kitchenIds),
+    ).catch(() => ({ data: null, error: null })),
   ]);
 
-  const rawKitchens = kitchensRes.data || [];
-  const rawBanks = bankRes.data || [];
-  const rawPeriods = periodsRes.data || [];
-  const rawUploads = uploadsRes.data || [];
+  const rawKitchens = (kitchensRes.data || []) as RawKitchen[];
+  const rawBanks = (bankRes.data || []) as RawBank[];
+  const rawPeriods = (periodsRes.data || []) as RawPeriod[];
+  const rawUploads = (uploadsRes.data || []) as RawUpload[];
+  const rawSummaries = ((summaryRes as { data?: unknown[] } | null)?.data || []) as Record<string, unknown>[];
+
+  // Fallback cepat satu kueri agregat bila v_period_summary tidak tersedia (misal lingkungan mock/uji)
+  let fallbackTxMap: Map<string, { totalInc: bigint; totalOut: bigint; incCount: number; outCount: number }> | null = null;
+  if (rawSummaries.length === 0 && rawPeriods.length > 0) {
+    const activePeriodIds = rawPeriods.map((p: RawPeriod) => p.id);
+    const { data: allTxs } = await supabase
+      .from('transactions')
+      .select('period_id, debit, credit')
+      .in('period_id', activePeriodIds)
+      .eq('status', 'posted');
+
+    if (allTxs && allTxs.length > 0) {
+      fallbackTxMap = new Map();
+      for (const t of allTxs as { period_id: string; debit: number | string; credit: number | string }[]) {
+        const pId = t.period_id;
+        const cur = fallbackTxMap.get(pId) || { totalInc: 0n, totalOut: 0n, incCount: 0, outCount: 0 };
+        const deb = BigInt(t.debit || 0);
+        const cred = BigInt(t.credit || 0);
+        if (deb > 0n) cur.incCount++;
+        if (cred > 0n) cur.outCount++;
+        cur.totalInc += deb;
+        cur.totalOut += cred;
+        fallbackTxMap.set(pId, cur);
+      }
+    }
+  }
 
   const results: SupabaseKitchenMeta[] = [];
 
   for (const k of rawKitchens) {
-    const bank = rawBanks.find((b) => b.kitchen_id === k.id);
-    const activePeriod = rawPeriods.find((p) => p.kitchen_id === k.id);
+    const bank = rawBanks.find((b: RawBank) => b.kitchen_id === k.id);
+    const activePeriod = rawPeriods.find((p: RawPeriod) => p.kitchen_id === k.id);
 
     const year = activePeriod?.year ?? new Date().getFullYear();
     const month = activePeriod?.month ?? new Date().getMonth() + 1;
@@ -127,7 +187,7 @@ export async function listUserKitchens(
     const periodStatus = (activePeriod?.status ?? 'open') as 'open' | 'locked';
     const openingBalance = activePeriod ? BigInt(activePeriod.opening_balance) : 0n;
 
-    // Ambil transaksi untuk menghitung saldo berjalan
+    // Ambil saldo berjalan dari view agregat PostgreSQL atau dari kueri batch fallback
     let summary: PeriodBalanceSummary = {
       openingBalance,
       totalIncoming: 0n,
@@ -138,40 +198,36 @@ export async function listUserKitchens(
     };
 
     if (activePeriod?.id) {
-      const { data: txs } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('kitchen_id', k.id)
-        .eq('period_id', activePeriod.id)
-        .eq('status', 'posted');
-
-      if (txs && txs.length > 0) {
-        let totalInc = 0n;
-        let totalOut = 0n;
-        let incCount = 0;
-        let outCount = 0;
-        for (const t of txs) {
-          const deb = BigInt(t.debit || 0);
-          const cred = BigInt(t.credit || 0);
-          if (deb > 0n) incCount++;
-          if (cred > 0n) outCount++;
-          totalInc += deb;
-          totalOut += cred;
-        }
+      const summaryRow = rawSummaries.find(
+        (s: Record<string, unknown>) => s.period_id === activePeriod.id,
+      );
+      if (summaryRow) {
+        const inc = BigInt(summaryRow.total_incoming as string | number || 0);
+        const out = BigInt(summaryRow.total_outgoing as string | number || 0);
         summary = {
           openingBalance,
-          totalIncoming: totalInc,
-          totalOutgoing: totalOut,
-          closingBalance: openingBalance + totalInc - totalOut,
-          incomingCount: incCount,
-          outgoingCount: outCount,
+          totalIncoming: inc,
+          totalOutgoing: out,
+          closingBalance: openingBalance + inc - out,
+          incomingCount: Number(summaryRow.incoming_count || 0),
+          outgoingCount: Number(summaryRow.outgoing_count || 0),
+        };
+      } else if (fallbackTxMap?.has(activePeriod.id)) {
+        const f = fallbackTxMap.get(activePeriod.id)!;
+        summary = {
+          openingBalance,
+          totalIncoming: f.totalInc,
+          totalOutgoing: f.totalOut,
+          closingBalance: openingBalance + f.totalInc - f.totalOut,
+          incomingCount: f.incCount,
+          outgoingCount: f.outCount,
         };
       }
     }
 
-    const kitchenUploads = rawUploads.filter((u) => u.kitchen_id === k.id);
-    const pendingDraftCount = kitchenUploads.filter((u) => u.status === 'uploaded').length;
-    const needsManualCount = kitchenUploads.filter((u) => u.status === 'needs_manual').length;
+    const kitchenUploads = rawUploads.filter((u: RawUpload) => u.kitchen_id === k.id);
+    const pendingDraftCount = kitchenUploads.filter((u: RawUpload) => u.status === 'uploaded').length;
+    const needsManualCount = kitchenUploads.filter((u: RawUpload) => u.status === 'needs_manual').length;
 
     results.push({
       id: k.id,
@@ -205,20 +261,7 @@ export async function getKitchenLedger(
   kitchenId: string,
   periodId?: string,
 ): Promise<SupabaseKitchenLedgerResult> {
-  // 1. Ambil info dapur & rekening bank
-  const [kitchenRes, bankRes] = await Promise.all([
-    supabase.from('kitchens').select('*').eq('id', kitchenId).single(),
-    supabase.from('bank_accounts').select('*').eq('kitchen_id', kitchenId).maybeSingle(),
-  ]);
-
-  if (kitchenRes.error || !kitchenRes.data) {
-    throw new HttpError(404, 'Dapur tidak ditemukan.');
-  }
-
-  const k = kitchenRes.data;
-  const bank = bankRes.data;
-
-  // 2. Ambil periode
+  // 1. Ambil info dapur, rekening bank, dan periode secara paralel untuk meminimalkan latensi
   let periodQuery = supabase
     .from('periods')
     .select('*')
@@ -233,11 +276,23 @@ export async function getKitchenLedger(
       .limit(1);
   }
 
-  const { data: periods, error: pErr } = await periodQuery;
-  if (pErr) {
-    throw new HttpError(500, `Gagal memuat periode: ${pErr.message}`);
+  const [kitchenRes, bankRes, periodsRes] = await Promise.all([
+    supabase.from('kitchens').select('*').eq('id', kitchenId).single(),
+    supabase.from('bank_accounts').select('*').eq('kitchen_id', kitchenId).maybeSingle(),
+    periodQuery,
+  ]);
+
+  if (kitchenRes.error || !kitchenRes.data) {
+    throw new HttpError(404, 'Dapur tidak ditemukan.');
   }
-  const activePeriod = periods?.[0];
+
+  if (periodsRes.error) {
+    throw new HttpError(500, `Gagal memuat periode: ${periodsRes.error.message}`);
+  }
+
+  const k = kitchenRes.data;
+  const bank = bankRes.data;
+  const activePeriod = periodsRes.data?.[0];
 
   if (!activePeriod) {
     throw new HttpError(404, 'Periode pembukuan tidak ditemukan untuk dapur ini.');
@@ -492,6 +547,14 @@ export async function createTransaction(
   const nextSeq = (lastSeqRow?.[0]?.seq_no ?? 0) + 1;
   const mainTxId = crypto.randomUUID();
   const amountBig = BigInt(input.amount);
+
+  if (amountBig <= 0n) {
+    throw new HttpError(400, 'Nominal transaksi harus lebih besar dari Rp 0.');
+  }
+  if (amountBig > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new HttpError(400, 'Nominal transaksi melebihi batas bilangan bulat aman sistem.');
+  }
+
   const debit = input.kind === 'incoming' ? Number(amountBig) : 0;
   const credit = input.kind === 'outgoing' ? Number(amountBig) : 0;
 
@@ -734,7 +797,14 @@ export async function updateTransaction(
   }
 
   if (input.amount !== undefined) {
-    const amountNum = Number(input.amount);
+    const amountBig = BigInt(input.amount);
+    if (amountBig <= 0n) {
+      throw new HttpError(400, 'Nominal transaksi harus lebih besar dari Rp 0.');
+    }
+    if (amountBig > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new HttpError(400, 'Nominal transaksi melebihi batas bilangan bulat aman sistem.');
+    }
+    const amountNum = Number(amountBig);
     if (existing.kind === 'incoming') {
       updates.debit = amountNum;
       updates.credit = 0;

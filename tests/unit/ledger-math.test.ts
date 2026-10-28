@@ -132,4 +132,60 @@ describe('src/lib/ledger-math.ts', () => {
     expect(summary.closingBalance).toBe(expectedClosing);
     expect(rows[rows.length - 1]?.runningBalance).toBe(expectedClosing);
   });
+
+  it('menjaga presisi integer pada nominal besar (miliaran rupiah) tanpa kehilangan presisi float', () => {
+    const opening = 25_000_000_000n; // 25 Miliar
+    const entries: LedgerEntryInput[] = [
+      {
+        id: 'tx-big-in',
+        seqNo: 1,
+        txDate: '2026-03-01',
+        kind: 'incoming',
+        referenceNo: 'REF-IN-1',
+        description: 'Dana Masuk APBD/Donasi Yayasan',
+        debit: 50_000_000_000n, // 50 Miliar
+        credit: 0n,
+        status: 'posted',
+      },
+      {
+        id: 'tx-big-out',
+        seqNo: 2,
+        txDate: '2026-03-02',
+        kind: 'outgoing',
+        referenceNo: 'REF-OUT-1',
+        description: 'Pengadaan logistik massal',
+        debit: 0n,
+        credit: 12_345_678_901n, // Nominal tidak bulat
+        status: 'posted',
+      },
+    ];
+
+    const { rows, summary } = computePeriodLedger(opening, entries);
+    expect(rows[0]?.runningBalance).toBe(75_000_000_000n);
+    expect(rows[1]?.runningBalance).toBe(62_654_321_099n);
+    expect(summary.closingBalance).toBe(62_654_321_099n);
+    expect(summary.totalIncoming).toBe(50_000_000_000n);
+    expect(summary.totalOutgoing).toBe(12_345_678_901n);
+  });
+
+  it('menangani defisit (saldo berjalan negatif) secara akurat tanpa galat matematika', () => {
+    const opening = 1_000_000n;
+    const entries: LedgerEntryInput[] = [
+      {
+        id: 'tx-overspend',
+        seqNo: 1,
+        txDate: '2026-03-05',
+        kind: 'outgoing',
+        referenceNo: 'REF-DEFISIT',
+        description: 'Belanja darurat melebihi kas',
+        debit: 0n,
+        credit: 2_500_000n,
+        status: 'posted',
+      },
+    ];
+
+    const { rows, summary } = computePeriodLedger(opening, entries);
+    expect(rows[0]?.runningBalance).toBe(-1_500_000n);
+    expect(summary.closingBalance).toBe(-1_500_000n);
+  });
 });
