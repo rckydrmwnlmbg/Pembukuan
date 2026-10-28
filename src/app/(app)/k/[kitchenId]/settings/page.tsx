@@ -574,16 +574,15 @@ export default function KitchenSettingsPage({
           />
         </div>
 
-        {/* Panel Kunci Periode & Transisi (M4 Task 2 & 3) */}
+        {/* Panel Tutup Buku & Perpindahan Periode (PRD FR-F8) */}
         <div className="bg-[var(--surface)] border border-[var(--line)] rounded-lg p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] pb-3">
             <div>
               <h3 className="text-sm font-semibold text-[var(--ink-base)]">
-                Kunci Periode ({settings.month}/{settings.year})
+                Tutup Buku & Perpindahan Periode ({formatPeriodLabel(settings.year, settings.month)})
               </h3>
               <p className="text-xs text-[var(--ink-muted)]">
-                Penguncian periode mencegah penambahan, perubahan, atau
-                pembatalan transaksi di database (SECURITY S-15).
+                Alur tutup buku resmi: Kunci transaksi periode ini, lalu bawa saldo akhir menjadi saldo awal periode berikutnya secara otomatis (PRD FR-F8).
               </p>
             </div>
             <span
@@ -609,19 +608,28 @@ export default function KitchenSettingsPage({
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             {!isLocked ? (
-              <div className="space-y-2">
-                <p className="text-xs text-[var(--ink-muted)]">
-                  Maker dapat mengunci periode bila seluruh transaksi periode ini
-                  telah selesai diposting.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowLockModal(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[var(--surface)] border border-[var(--line)] text-xs font-semibold text-[var(--ink-base)] hover:bg-[var(--neutral-subtle)] transition-colors"
-                >
-                  <Lock className="w-3.5 h-3.5 text-[var(--warning)]" />
-                  Kunci Periode Ini
-                </button>
+              <div className="space-y-3 w-full">
+                <div className="rounded-lg border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--ink-muted)] space-y-1">
+                  <p className="font-semibold text-[var(--ink)]">Tahapan Perpindahan Periode (Tutup Buku):</p>
+                  <p>1. <strong>Kunci Periode</strong>: Setelah semua transaksi bulan ini selesai dicatat, kunci periode agar data tidak berubah.</p>
+                  <p>2. <strong>Buka Periode Berikutnya</strong>: Sistem akan membawa Saldo Akhir saat ini (<strong>Rp {formatRupiahNumber(BigInt(summary.closingBalance))}</strong>) menjadi Saldo Awal bulan berikutnya otomatis.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowLockModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[var(--surface)] border border-[var(--line)] text-xs font-semibold text-[var(--ink-base)] hover:bg-[var(--neutral-subtle)] transition-colors"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-[var(--warning)]" />
+                    Kunci Periode Ini & Siapkan Transisi
+                  </button>
+                  <Link
+                    href={`/k/${kitchenId}/ledger`}
+                    className="inline-flex items-center gap-1.5 text-xs text-[var(--accent)] hover:underline"
+                  >
+                    Atau buka periode baru langsung dari menu Buku Kas &rarr;
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="space-y-3 w-full">

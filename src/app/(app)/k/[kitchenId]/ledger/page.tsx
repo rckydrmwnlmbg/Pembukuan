@@ -42,6 +42,13 @@ export default async function KitchenLedgerPage({
   // 1. Ambil dari database Supabase nyata
   if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
     try {
+      // Jalankan getSupabaseKitchenLedger terlebih dahulu agar auto-healing rekonsiliasi periode berjalan
+      ledgerData = await getSupabaseKitchenLedger(
+        supabase,
+        kitchenId,
+        selectedPeriodId,
+      );
+
       const { data: pList } = await supabase
         .from('periods')
         .select('id, year, month, status')
@@ -58,12 +65,6 @@ export default async function KitchenLedgerPage({
           label: formatPeriodLabel(p.year, p.month),
         }));
       }
-
-      ledgerData = await getSupabaseKitchenLedger(
-        supabase,
-        kitchenId,
-        selectedPeriodId,
-      );
     } catch {
       // Abaikan jika belum ada di database nyata
     }

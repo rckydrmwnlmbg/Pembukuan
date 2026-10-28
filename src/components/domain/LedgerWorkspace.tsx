@@ -161,6 +161,42 @@ export function LedgerWorkspace({
   const [panelError, setPanelError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Modal Buka Periode Baru
+  const [showAddPeriodModal, setShowAddPeriodModal] = useState(false);
+  const [newPeriodMonth, setNewPeriodMonth] = useState(kitchen.month === 12 ? 1 : kitchen.month + 1);
+  const [newPeriodYear, setNewPeriodYear] = useState(kitchen.month === 12 ? kitchen.year + 1 : kitchen.year);
+  const [newPeriodOpeningBalance, setNewPeriodOpeningBalance] = useState('');
+  const [addPeriodLoading, setAddPeriodLoading] = useState(false);
+  const [addPeriodError, setAddPeriodError] = useState<string | null>(null);
+
+  async function handleAddPeriodSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAddPeriodError(null);
+    setAddPeriodLoading(true);
+    try {
+      const res = await fetch(`/api/k/${kitchen.id}/periods`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: Number(newPeriodYear),
+          month: Number(newPeriodMonth),
+          openingBalance: newPeriodOpeningBalance.replace(/\D/g, '') || '0',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || data.error || 'Gagal membuat periode baru.');
+      }
+      setShowAddPeriodModal(false);
+      router.push(`/k/${kitchen.id}/ledger?periodId=${data.period.id}`);
+      router.refresh();
+    } catch (err: unknown) {
+      setAddPeriodError(err instanceof Error ? err.message : 'Terjadi galat');
+    } finally {
+      setAddPeriodLoading(false);
+    }
+  }
+
   const isLocked = kitchen.periodStatus === 'locked';
 
   async function fetchFilteredRows(
@@ -429,24 +465,38 @@ export function LedgerWorkspace({
               {isLocked ? 'Periode Terkunci' : 'Periode Terbuka'}
             </Badge>
 
-            {availablePeriods.length > 1 && (
-              <div className="flex items-center gap-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface-muted)] px-2.5 py-1">
-                <Calendar className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
-                <span className="text-[11px] font-medium text-[var(--ink-muted)]">Pilih Periode:</span>
-                <select
-                  value={kitchen.periodId}
-                  onChange={(e) => router.push(`/k/${kitchen.id}/ledger?periodId=${e.target.value}`)}
-                  aria-label="Pilih Periode Pembukuan"
-                  className="bg-transparent text-xs font-semibold text-[var(--ink)] focus:outline-none cursor-pointer"
-                >
-                  {availablePeriods.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label} {p.status === 'locked' ? '(Terkunci)' : '(Aktif)'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* Pemilih Periode Pembukuan - Selalu Interaktif & Dapat Diklik */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface-muted)] px-2.5 py-1">
+              <Calendar className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
+              <span className="text-[11px] font-medium text-[var(--ink-muted)]">Periode:</span>
+              <select
+                value={kitchen.periodId}
+                onChange={(e) => {
+                  if (e.target.value === '__add_new__') {
+                    setShowAddPeriodModal(true);
+                  } else {
+                    router.push(`/k/${kitchen.id}/ledger?periodId=${e.target.value}`);
+                  }
+                }}
+                aria-label="Pilih Periode Pembukuan"
+                className="bg-transparent text-xs font-semibold text-[var(--ink)] focus:outline-none cursor-pointer"
+              >
+                {availablePeriods.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label} {p.status === 'locked' ? '(Terkunci)' : '(Aktif)'}
+                  </option>
+                ))}
+                <option value="__add_new__">+ Buka Periode Baru...</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowAddPeriodModal(true)}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--accent)] hover:underline"
+            >
+              + Periode Baru
+            </button>
           </div>
           <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
             Buku kas {kitchen.periodLabel} &bull; PJ: <span className="font-semibold text-[var(--ink)]">{kitchen.pjName}</span> &bull; Rekening {kitchen.bankName} {kitchen.accountNumberMasked} &bull; Biaya admin{' '}
@@ -1213,6 +1263,111 @@ export function LedgerWorkspace({
           </div>
         </div>
       ) : null}
+
+      {/* Modal Buka Periode Baru */}
+      {showAddPeriodModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-[var(--accent)]" />
+                <h3 className="text-sm font-bold text-[var(--ink)]">
+                  Buka Periode Pembukuan Baru
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddPeriodModal(false)}
+                className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)]"
+              >
+                ✕
+              </button>
+            </div>
+
+            {addPeriodError && (
+              <div className="rounded-lg bg-[var(--danger-subtle,#fce8e6)] p-3 text-xs text-[var(--danger,#c5221f)]">
+                {addPeriodError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddPeriodSubmit} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold text-[var(--ink)]">
+                  Bulan Pembukuan
+                </label>
+                <select
+                  value={newPeriodMonth}
+                  onChange={(e) => setNewPeriodMonth(Number(e.target.value))}
+                  className="w-full rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                >
+                  <option value={1}>Januari</option>
+                  <option value={2}>Februari</option>
+                  <option value={3}>Maret</option>
+                  <option value={4}>April</option>
+                  <option value={5}>Mei</option>
+                  <option value={6}>Juni</option>
+                  <option value={7}>Juli</option>
+                  <option value={8}>Agustus</option>
+                  <option value={9}>September</option>
+                  <option value={10}>Oktober</option>
+                  <option value={11}>November</option>
+                  <option value={12}>Desember</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-[var(--ink)]">
+                  Tahun Pembukuan
+                </label>
+                <input
+                  type="number"
+                  required
+                  min={2020}
+                  max={2050}
+                  value={newPeriodYear}
+                  onChange={(e) => setNewPeriodYear(Number(e.target.value))}
+                  className="w-full rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold tabular-nums text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-[var(--ink)]">
+                  Saldo Awal Periode (Rp)
+                </label>
+                <input
+                  type="text"
+                  placeholder="0"
+                  value={newPeriodOpeningBalance}
+                  onChange={(e) =>
+                    setNewPeriodOpeningBalance(e.target.value.replace(/\D/g, ''))
+                  }
+                  className="w-full rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold tabular-nums text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                />
+                <p className="text-[11px] text-[var(--ink-muted)]">
+                  Kosongkan atau isi 0 jika saldo awal bersumber dari penambahan dana baru.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[var(--line)] pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddPeriodModal(false)}
+                  className="rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3.5 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={addPeriodLoading}
+                  className="rounded-lg bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[var(--accent-hover)] disabled:opacity-50"
+                >
+                  {addPeriodLoading ? 'Membuka...' : 'Buka Periode Ini'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
