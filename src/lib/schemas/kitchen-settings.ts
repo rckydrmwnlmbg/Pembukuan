@@ -47,6 +47,8 @@ export const UpdateKitchenSettingsBodySchema = z
       .regex(/^[0-9\- ]{4,32}$/, 'Nomor rekening tidak valid (4-32 digit).'),
     adminFeeDefault: PositiveRupiah,
     initialOpeningBalance: Rupiah.optional(),
+    year: z.number().int().min(2020).max(2050).optional(),
+    month: z.number().int().min(1).max(12).optional(),
   })
   .strict();
 

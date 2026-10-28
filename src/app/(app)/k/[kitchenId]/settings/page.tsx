@@ -93,6 +93,8 @@ export default function KitchenSettingsPage({
   const [newAccountNo, setNewAccountNo] = useState('');
   const [adminFeeDefault, setAdminFeeDefault] = useState('6500');
   const [initialOpeningBalance, setInitialOpeningBalance] = useState('');
+  const [periodYear, setPeriodYear] = useState(2026);
+  const [periodMonth, setPeriodMonth] = useState(10);
 
   // Modals for period lock/unlock
   const [showLockModal, setShowLockModal] = useState(false);
@@ -254,6 +256,8 @@ export default function KitchenSettingsPage({
         setBankCode(setData.bankCode);
         setAdminFeeDefault(setData.adminFeeDefault);
         setInitialOpeningBalance(setData.openingBalance);
+        setPeriodYear(setData.year);
+        setPeriodMonth(setData.month);
 
         if (legRes.ok) {
           const legData = await legRes.json();
@@ -301,6 +305,11 @@ export default function KitchenSettingsPage({
 
       if (initialOpeningBalance.trim()) {
         payload.initialOpeningBalance = initialOpeningBalance.replace(/\D/g, '');
+      }
+
+      if (!isLocked) {
+        payload.year = Number(periodYear);
+        payload.month = Number(periodMonth);
       }
 
       const res = await fetch(`/api/k/${kitchenId}/settings`, {
@@ -775,6 +784,48 @@ export default function KitchenSettingsPage({
                   setInitialOpeningBalance(e.target.value.replace(/\D/g, ''))
                 }
                 className="w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs tabular-nums text-[var(--ink-base)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              />
+            </div>
+
+            {/* Bulan Periode Berjalan */}
+            <div className="space-y-1.5">
+              <label className="font-medium text-[var(--ink-muted)]">
+                Bulan Periode Berjalan
+              </label>
+              <select
+                disabled={isLocked}
+                value={periodMonth}
+                onChange={(e) => setPeriodMonth(Number(e.target.value))}
+                className="w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--ink-base)] disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              >
+                <option value={1}>Januari</option>
+                <option value={2}>Februari</option>
+                <option value={3}>Maret</option>
+                <option value={4}>April</option>
+                <option value={5}>Mei</option>
+                <option value={6}>Juni</option>
+                <option value={7}>Juli</option>
+                <option value={8}>Agustus</option>
+                <option value={9}>September</option>
+                <option value={10}>Oktober</option>
+                <option value={11}>November</option>
+                <option value={12}>Desember</option>
+              </select>
+            </div>
+
+            {/* Tahun Periode Berjalan */}
+            <div className="space-y-1.5">
+              <label className="font-medium text-[var(--ink-muted)]">
+                Tahun Periode Berjalan
+              </label>
+              <input
+                type="number"
+                min={2020}
+                max={2050}
+                disabled={isLocked}
+                value={periodYear}
+                onChange={(e) => setPeriodYear(Number(e.target.value))}
+                className="w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-xs tabular-nums text-[var(--ink-base)] disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
               />
             </div>
           </div>

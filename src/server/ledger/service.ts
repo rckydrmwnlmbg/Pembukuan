@@ -329,6 +329,16 @@ export class LedgerServiceStore {
     const st = this.getKitchenStateOrThrow(kitchenId);
     this.assertPeriodOpen(st, input.periodId);
 
+    const [yStr, mStr] = input.txDate.split('-');
+    const txYear = yStr ? parseInt(yStr, 10) : NaN;
+    const txMonth = mStr ? parseInt(mStr, 10) : NaN;
+    if (!isNaN(txYear) && !isNaN(txMonth)) {
+      if (st.entries.length === 0 && st.kitchen.periodStatus === 'open') {
+        st.kitchen.year = txYear;
+        st.kitchen.month = txMonth;
+      }
+    }
+
     const refNo = input.referenceNo?.trim() || null;
 
     if (input.kind === 'outgoing' && input.includeAdminFee && !refNo) {

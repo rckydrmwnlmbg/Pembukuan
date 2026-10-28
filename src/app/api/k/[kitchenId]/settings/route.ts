@@ -87,6 +87,45 @@ export const PATCH = kitchenRoute(
             .eq('kitchen_id', kitchenId);
         }
 
+        // Perbarui tahun & bulan periode jika disertakan dan periode masih open
+        if (input.year !== undefined || input.month !== undefined) {
+          const { data: openPeriod } = await supabase
+            .from('periods')
+            .select('id, year, month')
+            .eq('kitchen_id', kitchenId)
+            .eq('status', 'open')
+            .order('year', { ascending: false })
+            .order('month', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (openPeriod) {
+            const targetYear = input.year ?? openPeriod.year;
+            const targetMonth = input.month ?? openPeriod.month;
+
+            const { data: conflictPeriod } = await supabase
+              .from('periods')
+              .select('id')
+              .eq('kitchen_id', kitchenId)
+              .eq('year', targetYear)
+              .eq('month', targetMonth)
+              .neq('id', openPeriod.id)
+              .maybeSingle();
+
+            if (conflictPeriod) {
+              throw new HttpError(
+                409,
+                `Periode ${targetMonth}/${targetYear} sudah ada pada dapur ini.`,
+              );
+            }
+
+            await supabase
+              .from('periods')
+              .update({ year: targetYear, month: targetMonth })
+              .eq('id', openPeriod.id);
+          }
+        }
+
         // Perbarui saldo awal pada periode aktif di Supabase jika disertakan
         if (input.initialOpeningBalance !== undefined) {
           const balanceBig = BigInt(input.initialOpeningBalance);

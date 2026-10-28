@@ -63,6 +63,33 @@ export interface SupabaseKitchenLedgerResult {
   summary: PeriodBalanceSummary;
 }
 
+interface RawKitchen {
+  id: string;
+  code: string;
+  name: string;
+  pj_name: string;
+  admin_fee_default?: number;
+  high_amount_threshold?: number;
+}
+interface RawBank {
+  kitchen_id: string;
+  bank_code: string;
+  account_no_last4: string;
+}
+interface RawPeriod {
+  id: string;
+  kitchen_id: string;
+  year: number;
+  month: number;
+  opening_balance: number | string;
+  status: string;
+}
+interface RawUpload {
+  kitchen_id: string;
+  status: string;
+  created_at: string;
+}
+
 /**
  * Mengambil seluruh dapur yang dapat diakses oleh user_id dari database Supabase.
  */
@@ -92,33 +119,6 @@ export async function listUserKitchens(
   }
 
   const kitchenIds = members.map((m) => m.kitchen_id);
-
-  interface RawKitchen {
-    id: string;
-    code: string;
-    name: string;
-    pj_name: string;
-    admin_fee_default?: number;
-    high_amount_threshold?: number;
-  }
-  interface RawBank {
-    kitchen_id: string;
-    bank_code: string;
-    account_no_last4: string;
-  }
-  interface RawPeriod {
-    id: string;
-    kitchen_id: string;
-    year: number;
-    month: number;
-    opening_balance: number | string;
-    status: string;
-  }
-  interface RawUpload {
-    kitchen_id: string;
-    status: string;
-    created_at: string;
-  }
 
   // 2. Ambil data dapur, rekening bank, periode aktif, upload tertunda, dan view saldo periode secara paralel
   const [kitchensRes, bankRes, periodsRes, uploadsRes, summaryRes] = await Promise.all([
@@ -254,6 +254,193 @@ export async function listUserKitchens(
 }
 
 /**
+ * Memastikan tersedianya ID periode yang sesuai dengan txDate (PRD E8: Periode ditentukan oleh tx_date).
+ * Jika belum ada periode untuk (kitchenId, year, month), fungsi ini akan membuatnya secara otomatis.
+ */
+export async function ensurePeriodForTxDate(
+  supabase: SupabaseClient,
+  kitchenId: string,
+  txDate: string,
+): Promise<string> {
+  const [yStr, mStr] = txDate.split('-');
+  const year = yStr ? parseInt(yStr, 10) : NaN;
+  const month = mStr ? parseInt(mStr, 10) : NaN;
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    throw new HttpError(400, `Format tanggal tidak valid: ${txDate}`);
+  }
+
+  // 1. Cek apakah periode (kitchen_id, year, month) sudah ada
+  const { data: existingPeriod } = await supabase
+    .from('periods')
+    .select('id, status')
+    .eq('kitchen_id', kitchenId)
+    .eq('year', year)
+    .eq('month', month)
+    .maybeSingle();
+
+  if (existingPeriod) {
+    if (existingPeriod.status === 'locked') {
+      throw new HttpError(
+        409,
+        `Periode ${month}/${year} sudah dikunci. Transaksi pada periode yang sudah dikunci tidak dapat ditambah.`,
+      );
+    }
+    return existingPeriod.id as string;
+  }
+
+  // 2. Jika belum ada periode, cek apakah dapur hanya memiliki 1 periode default yang belum memiliki transaksi sama sekali
+  const { data: allPeriods } = await supabase
+    .from('periods')
+    .select('id, year, month, opening_balance, status')
+    .eq('kitchen_id', kitchenId);
+
+  const firstP = allPeriods?.[0];
+  if (allPeriods && allPeriods.length === 1 && firstP && firstP.status === 'open') {
+    const { count: txCount } = await supabase
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('period_id', firstP.id);
+
+    if (txCount === 0) {
+      // Perbarui year dan month periode kosong ini agar menjadi periode awal sesuai transaksi pertama
+      await supabase
+        .from('periods')
+        .update({ year, month })
+        .eq('id', firstP.id);
+      return firstP.id as string;
+    }
+  }
+
+  // 3. Jika sudah ada transaksi di periode lain, buat periode baru
+  const newPeriodId = crypto.randomUUID();
+  const { error: insErr } = await supabase.from('periods').insert({
+    id: newPeriodId,
+    kitchen_id: kitchenId,
+    year,
+    month,
+    opening_balance: 0,
+    status: 'open',
+  });
+
+  if (insErr) {
+    throw new HttpError(
+      500,
+      `Gagal membuat periode otomatis untuk ${month}/${year}: ${insErr.message}`,
+    );
+  }
+
+  return newPeriodId;
+}
+
+/**
+ * Menyinkronkan dan memulihkan period_id transaksi agar selaras dengan tx_date (PRD E8).
+ * Menangani kasus di mana transaksi diinput sebelum perbaikan ini dan tersangkut pada periode yang salah.
+ */
+export async function reconcileKitchenPeriods(
+  supabase: SupabaseClient,
+  kitchenId: string,
+): Promise<void> {
+  try {
+    const [periodsRes, txsRes] = await Promise.all([
+      supabase.from('periods').select('*').eq('kitchen_id', kitchenId),
+      supabase.from('transactions').select('id, period_id, tx_date').eq('kitchen_id', kitchenId),
+    ]);
+
+    const rawPeriods = (periodsRes.data || []) as RawPeriod[];
+    const rawTxs = (txsRes.data || []) as { id: string; period_id: string; tx_date: string }[];
+
+    if (rawPeriods.length === 0 || rawTxs.length === 0) return;
+
+    const periodMap = new Map<string, { id: string; year: number; month: number; opening_balance: number; status: string }>();
+    for (const p of rawPeriods) {
+      periodMap.set(p.id, {
+        id: p.id,
+        year: p.year,
+        month: p.month,
+        opening_balance: Number(p.opening_balance || 0),
+        status: p.status,
+      });
+    }
+
+    // Kasus umum: 1 periode default terbuka, dan semua transaksi berada pada bulan/tahun yang berbeda
+    const defaultP = rawPeriods[0];
+    if (rawPeriods.length === 1 && defaultP && defaultP.status === 'open') {
+      const uniqueTxPeriods = new Set(
+        rawTxs.map((t) => {
+          const [y, m] = t.tx_date.split('-');
+          return `${y || ''}-${m || ''}`;
+        }),
+      );
+
+      const uniqueArr = Array.from(uniqueTxPeriods);
+      if (uniqueArr.length === 1 && uniqueArr[0]) {
+        const [txYearStr, txMonthStr] = uniqueArr[0].split('-');
+        const txYear = txYearStr ? parseInt(txYearStr, 10) : NaN;
+        const txMonth = txMonthStr ? parseInt(txMonthStr, 10) : NaN;
+
+        if (!isNaN(txYear) && !isNaN(txMonth) && (defaultP.year !== txYear || defaultP.month !== txMonth)) {
+          await supabase
+            .from('periods')
+            .update({ year: txYear, month: txMonth })
+            .eq('id', defaultP.id);
+          return;
+        }
+      }
+    }
+
+    // Periksa transaksi yang period_id-nya tidak sesuai tahun dan bulan tx_date
+    for (const t of rawTxs) {
+      if (!t.tx_date) continue;
+      const [txYearStr, txMonthStr] = t.tx_date.split('-');
+      const txYear = txYearStr ? parseInt(txYearStr, 10) : NaN;
+      const txMonth = txMonthStr ? parseInt(txMonthStr, 10) : NaN;
+      if (isNaN(txYear) || isNaN(txMonth)) continue;
+
+      const curP = periodMap.get(t.period_id);
+      if (curP && curP.year === txYear && curP.month === txMonth) {
+        continue;
+      }
+
+      // Cari atau buat periode yang tepat
+      let targetP = Array.from(periodMap.values()).find(
+        (p) => p.year === txYear && p.month === txMonth,
+      );
+
+      if (!targetP) {
+        const newPId = crypto.randomUUID();
+        const { error: insErr } = await supabase.from('periods').insert({
+          id: newPId,
+          kitchen_id: kitchenId,
+          year: txYear,
+          month: txMonth,
+          opening_balance: 0,
+          status: 'open',
+        });
+        if (!insErr) {
+          targetP = {
+            id: newPId,
+            year: txYear,
+            month: txMonth,
+            opening_balance: 0,
+            status: 'open',
+          };
+          periodMap.set(newPId, targetP);
+        }
+      }
+
+      if (targetP) {
+        await supabase
+          .from('transactions')
+          .update({ period_id: targetP.id })
+          .eq('id', t.id);
+      }
+    }
+  } catch {
+    // Non-blocking, jangan gagalkan alur utama
+  }
+}
+
+/**
  * Mengambil buku kas satu dapur lengkap dengan baris transaksi dan ringkasan saldo.
  */
 export async function getKitchenLedger(
@@ -261,6 +448,9 @@ export async function getKitchenLedger(
   kitchenId: string,
   periodId?: string,
 ): Promise<SupabaseKitchenLedgerResult> {
+  // Selaraskan periode transaksi otomatis jika ada tanggal transaksi yang melenceng dari periodenya
+  await reconcileKitchenPeriods(supabase, kitchenId);
+
   // 1. Ambil info dapur, rekening bank, dan periode secara paralel untuk meminimalkan latensi
   let periodQuery = supabase
     .from('periods')
@@ -518,22 +708,12 @@ export async function createTransaction(
   kitchenId: string,
   input: CreateTransactionInput,
 ): Promise<{ created: ComputedLedgerRow[]; summary: PeriodBalanceSummary }> {
-  let targetPeriodId: string = input.periodId ?? '';
-  if (!targetPeriodId) {
-    const { data: p } = await supabase
-      .from('periods')
-      .select('id')
-      .eq('kitchen_id', kitchenId)
-      .eq('status', 'open')
-      .order('year', { ascending: false })
-      .order('month', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!p || !p.id) {
-      throw new HttpError(404, 'Periode aktif tidak ditemukan.');
-    }
-    targetPeriodId = p.id as string;
-  }
+  // Resolusi periode otomatis berdasarkan txDate (PRD E8: Periode ditentukan oleh tx_date)
+  const targetPeriodId = await ensurePeriodForTxDate(
+    supabase,
+    kitchenId,
+    input.txDate,
+  );
 
   // 1. Ambil nomor seq_no berikutnya
   const { data: lastSeqRow } = await supabase
@@ -641,7 +821,7 @@ export async function createTransaction(
   }
 
   // Ambil buku kas termutakhir
-  const ledger = await getKitchenLedger(supabase, kitchenId, input.periodId);
+  const ledger = await getKitchenLedger(supabase, kitchenId, targetPeriodId);
   const createdRows = ledger.rows.filter(
     (r) => r.id === mainTxId || r.parentTransactionId === mainTxId,
   );
