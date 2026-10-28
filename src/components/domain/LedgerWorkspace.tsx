@@ -270,6 +270,7 @@ export function LedgerWorkspace({
         }),
       });
       const data = (await res.json()) as {
+        created?: SerializedLedgerRow[];
         error?: { message?: string };
       };
       if (!res.ok) {
@@ -280,6 +281,14 @@ export function LedgerWorkspace({
         return;
       }
       setPanel({ type: 'closed' });
+
+      const createdPeriodId = data.created?.[0]?.periodId;
+      if (createdPeriodId && createdPeriodId !== kitchen.periodId) {
+        router.push(`/k/${kitchen.id}/ledger?periodId=${createdPeriodId}`);
+        router.refresh();
+        return;
+      }
+
       setBannerMessage({
         tone: 'success',
         text:
