@@ -251,4 +251,34 @@ describe('Milestone M4: Kunci Periode, Saldo Awal Otomatis, Pengaturan Dapur, & 
     expect(openWithDrafts?.pendingDraftCount).toBe(3);
     expect(lockedKitchen?.periodStatus).toBe('locked');
   });
+
+  it('8. Mengubah saldo awal per-periode secara langsung menyesuaikan saldo akhir dan menolak pada periode terkunci', () => {
+    const kitchenA = store.getKitchen(KITCHEN_A);
+    const initialClosing = kitchenA.summary.closingBalance;
+    const initialOpening = kitchenA.summary.openingBalance;
+
+    // Ubah saldo awal bertambah Rp 10.000.000
+    const newOpening = initialOpening + 10_000_000n;
+    const result = store.updatePeriodOpeningBalance(
+      KITCHEN_A,
+      kitchenA.periodId,
+      newOpening,
+      ACTOR_MAKER,
+    );
+
+    expect(result.openingBalance).toBe(newOpening);
+    expect(result.summary.openingBalance).toBe(newOpening);
+    expect(result.summary.closingBalance).toBe(initialClosing + 10_000_000n);
+
+    // Pada periode terkunci, perubahan saldo awal wajib ditolak
+    const kitchenLocked = store.getKitchen(KITCHEN_LOCKED);
+    expect(() =>
+      store.updatePeriodOpeningBalance(
+        KITCHEN_LOCKED,
+        kitchenLocked.periodId,
+        50_000_000n,
+        ACTOR_MAKER,
+      ),
+    ).toThrowError(/Periode terkunci/);
+  });
 });

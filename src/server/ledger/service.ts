@@ -777,6 +777,48 @@ export class LedgerServiceStore {
     };
   }
 
+  public updatePeriodOpeningBalance(
+    kitchenId: string,
+    periodId: string,
+    openingBalance: bigint,
+    actorId: string,
+  ): { periodId: string; openingBalance: bigint; summary: PeriodBalanceSummary } {
+    const st = this.getKitchenStateOrThrow(kitchenId);
+
+    if (st.kitchen.periodId !== periodId) {
+      throw new HttpError(404, 'Periode tidak ditemukan pada dapur ini.');
+    }
+
+    this.assertPeriodOpen(st, periodId);
+
+    const prev = st.kitchen.openingBalance;
+    st.kitchen.openingBalance = openingBalance;
+
+    const nowIso = new Date().toISOString();
+    st.auditLogs.push({
+      id: crypto.randomUUID(),
+      kitchenId,
+      actorId,
+      action: 'kitchens.update',
+      entity: 'periods',
+      entityId: periodId,
+      before: { openingBalance: prev.toString() },
+      after: { openingBalance: openingBalance.toString() },
+      createdAt: nowIso,
+    });
+
+    const { summary } = computePeriodLedger(
+      st.kitchen.openingBalance,
+      st.entries,
+    );
+
+    return {
+      periodId,
+      openingBalance,
+      summary,
+    };
+  }
+
   /**
    * Mengunci periode berjalan (PRD FR-F8.1, SECURITY S-15, M4).
    * Maker dapat mengunci; menolak jika ada draf yang belum diposting kecuali disetujui secara eksplisit.

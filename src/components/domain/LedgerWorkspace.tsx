@@ -197,6 +197,46 @@ export function LedgerWorkspace({
     }
   }
 
+  // Modal Ubah Saldo Awal Periode
+  const [showEditOpeningModal, setShowEditOpeningModal] = useState(false);
+  const [editOpeningAmount, setEditOpeningAmount] = useState('');
+  const [editOpeningLoading, setEditOpeningLoading] = useState(false);
+  const [editOpeningError, setEditOpeningError] = useState<string | null>(null);
+
+  async function handleEditOpeningSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setEditOpeningError(null);
+    setEditOpeningLoading(true);
+    try {
+      const cleanDigits = editOpeningAmount.replace(/\D/g, '') || '0';
+      const res = await fetch(`/api/k/${kitchen.id}/periods/${kitchen.periodId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          openingBalance: cleanDigits,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || data.error || 'Gagal mengubah saldo awal periode.');
+      }
+      setShowEditOpeningModal(false);
+      setBannerMessage({
+        tone: 'success',
+        text: `Saldo awal periode ${kitchen.periodLabel} berhasil diperbarui menjadi ${formatRupiah(BigInt(cleanDigits))}.`,
+      });
+      if (data.summary) {
+        setSummary(data.summary);
+      }
+      router.refresh();
+      await fetchFilteredRows(searchQuery, statusFilter);
+    } catch (err: unknown) {
+      setEditOpeningError(err instanceof Error ? err.message : 'Terjadi galat saat menyimpan saldo awal.');
+    } finally {
+      setEditOpeningLoading(false);
+    }
+  }
+
   const isLocked = kitchen.periodStatus === 'locked';
 
   async function fetchFilteredRows(
@@ -530,6 +570,17 @@ export function LedgerWorkspace({
             variant="secondary"
             size="sm"
             disabled={isLocked}
+            onClick={() => {
+              setEditOpeningAmount(summary.openingBalance);
+              setShowEditOpeningModal(true);
+            }}
+          >
+            Ubah Saldo Awal
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={isLocked}
             onClick={() => openCreatePanel('incoming')}
           >
             + Catat Dana Masuk
@@ -723,7 +774,18 @@ export function LedgerWorkspace({
 
             <tbody className="divide-y divide-[var(--line-subtle)]">
               {/* Baris 1 (NO = 1): PERPINDAHAN SALDO BULAN SEBELUMNYA (OI-04) */}
-              <tr className="bg-[var(--surface-subtle)] font-medium text-[var(--ink-primary)]">
+              <tr
+                className={`bg-[var(--surface-subtle)] font-medium text-[var(--ink-primary)] transition-colors ${
+                  !isLocked ? 'cursor-pointer hover:bg-[var(--surface-muted)]' : ''
+                }`}
+                onClick={() => {
+                  if (!isLocked) {
+                    setEditOpeningAmount(summary.openingBalance);
+                    setShowEditOpeningModal(true);
+                  }
+                }}
+                title={!isLocked ? 'Klik untuk mengubah Saldo Awal periode ini' : undefined}
+              >
                 <td className="sticky left-0 z-10 w-[52px] min-w-[52px] max-w-[52px] border-r border-[var(--line-subtle)] bg-[var(--surface-subtle)] px-2.5 py-2 text-right tabular-nums shadow-[1px_0_0_0_var(--line)]">
                   1
                 </td>
@@ -758,7 +820,14 @@ export function LedgerWorkspace({
                   {formatRupiah(openingBalanceBig)}
                 </td>
                 <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-xs text-[var(--ink-secondary)] truncate">
-                  Saldo awal periode
+                  <div className="flex items-center justify-between gap-1">
+                    <span>Saldo awal periode</span>
+                    {!isLocked && (
+                      <span className="rounded bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent)] border border-[var(--line-strong)] shrink-0">
+                        Ubah
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-2.5 py-2 text-xs text-[var(--ink-muted)]" />
               </tr>
@@ -1362,6 +1431,76 @@ export function LedgerWorkspace({
                   className="rounded-lg bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[var(--accent-hover)] disabled:opacity-50"
                 >
                   {addPeriodLoading ? 'Membuka...' : 'Buka Periode Ini'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ubah Saldo Awal Periode */}
+      {showEditOpeningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-[var(--ink)]">
+                  Ubah Saldo Awal Periode
+                </h3>
+                <p className="text-xs text-[var(--ink-muted)]">
+                  {kitchen.periodLabel} ({kitchen.name})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditOpeningModal(false)}
+                className="text-xs text-[var(--ink-muted)] hover:text-[var(--ink)]"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editOpeningError && (
+              <div className="rounded-lg bg-[var(--danger-subtle,#fce8e6)] p-3 text-xs text-[var(--danger,#c5221f)]">
+                {editOpeningError}
+              </div>
+            )}
+
+            <form onSubmit={handleEditOpeningSubmit} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold text-[var(--ink)]">
+                  Nominal Saldo Awal (Rp)
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="0"
+                  value={editOpeningAmount}
+                  onChange={(e) =>
+                    setEditOpeningAmount(e.target.value.replace(/\D/g, ''))
+                  }
+                  className="w-full rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold tabular-nums text-[var(--ink)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                />
+                <p className="text-[11px] text-[var(--ink-muted)] leading-relaxed">
+                  Format angka: <span className="font-semibold text-[var(--ink)]">{formatRupiah(BigInt(editOpeningAmount.replace(/\D/g, '') || '0'))}</span>.
+                  Saldo akhir dan saldo berjalan setiap baris transaksi pada periode {kitchen.periodLabel} akan otomatis dihitung ulang.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[var(--line)] pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditOpeningModal(false)}
+                  className="rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3.5 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)]"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={editOpeningLoading}
+                  className="rounded-lg bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[var(--accent-hover)] disabled:opacity-50"
+                >
+                  {editOpeningLoading ? 'Menyimpan...' : 'Simpan Saldo Awal'}
                 </button>
               </div>
             </form>

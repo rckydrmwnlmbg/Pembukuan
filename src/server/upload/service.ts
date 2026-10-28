@@ -15,6 +15,7 @@ import {
 } from '@/server/extraction/ai-extract';
 import { parseReceiptText } from '@/server/extraction/receipt-parser';
 import { extractPayloadFromPdf } from '@/server/extraction/pdf-helper';
+import { detectAndParseMultiTrxPdf } from '@/server/extraction/multi-trx-parser';
 import {
   consistencyFlags,
   CONSISTENCY_FLAG_DESCRIPTIONS,
@@ -447,6 +448,67 @@ export class UploadServiceStore {
         parserUsed = 'rate_limited';
         fallbackReason = `Batas ekstraksi harian dapur (${env.EXTRACTION_DAILY_LIMIT} berkas/hari) telah tercapai. Silakan isi formulir secara manual.`;
       } else {
+        // 0. Cek apakah dokumen merupakan laporan transaksi banyak (misal BNI Direct PDF)
+        if (normalized.mediaType === 'application/pdf') {
+          try {
+            const multiRows = await detectAndParseMultiTrxPdf(normalized.bytes);
+            if (multiRows.length > 0) {
+              for (let mIdx = 0; mIdx < multiRows.length; mIdx++) {
+                const mRow = multiRows[mIdx]!;
+                const mUploadId = randomUUID();
+                const isDiffBank =
+                  mRow.isOnlineTransfer &&
+                  mRow.recipientBank.trim().toUpperCase() !==
+                    kitchenMeta.bankCode.trim().toUpperCase();
+
+                const rec: UploadRecord = {
+                  id: mUploadId,
+                  kitchenId,
+                  periodId: kitchenMeta.periodId,
+                  storagePath: normalized.storagePath,
+                  originalName: `${normalized.displayName} (#${mIdx + 1} - ${mRow.recipientName})`,
+                  mime: normalized.mediaType,
+                  sizeBytes: normalized.bytes.byteLength,
+                  sha256: `${normalized.sha256}_${mIdx}`,
+                  status: 'parsed',
+                  parserUsed: 'ai',
+                  txDate: mRow.txDate,
+                  referenceNo: mRow.referenceNo,
+                  amount: mRow.amount,
+                  senderAccount: kitchenMeta.accountNo,
+                  recipientAccount: mRow.recipientAccount || null,
+                  recipientName: mRow.recipientName,
+                  recipientBank: mRow.recipientBank,
+                  memo: mRow.service,
+                  suggestedDescription: `${mRow.recipientName} - ${mRow.service}`,
+                  matchedRuleId: null,
+                  suggestedKitchenId: kitchenId,
+                  suggestedKitchenName: kitchenMeta.name,
+                  wrongKitchenWarning: null,
+                  suggestedIncludeAdminFee: isDiffBank,
+                  suggestedAdminFeeAmount: isDiffBank
+                    ? kitchenMeta.adminFeeDefault.toString()
+                    : '0',
+                  consistencyFlags: [],
+                  consistencyReasons: [],
+                  lowConfidenceFields: [],
+                  confidence: { txDate: 1.0, referenceNo: 1.0, amount: 1.0 },
+                  fallbackReason: null,
+                  postedTransactionId: null,
+                  uploadedBy: actorId,
+                  createdAt: new Date().toISOString(),
+                };
+
+                this.uploads.set(mUploadId, rec);
+                results.push(rec);
+              }
+              continue;
+            }
+          } catch {
+            // Lanjut ke single-receipt parser jika gagal
+          }
+        }
+
         // 1. Ekstraksi deterministik lokal jika berkas PDF memuat teks transaksi
         if (normalized.mediaType === 'application/pdf') {
           try {
