@@ -19,12 +19,17 @@ export interface LedgerTableProps {
   closingBalance: bigint;
   year: number;
   month: number;
+  isTransitioned?: boolean;
   onRowClick?: (row: SerializedLedgerRow) => void;
   selectedRowId?: string | null;
   className?: string;
 }
 
-function getOpeningRowDescription(year: number, month: number): string {
+function getOpeningRowDescription(
+  year: number,
+  month: number,
+  isTransitioned: boolean = false,
+): string {
   const months = [
     'JANUARI',
     'FEBRUARI',
@@ -39,9 +44,13 @@ function getOpeningRowDescription(year: number, month: number): string {
     'NOVEMBER',
     'DESEMBER',
   ];
-  const prevMonthIdx = month === 1 ? 11 : month - 2;
-  const prevYear = month === 1 ? year - 1 : year;
-  return `PERPINDAHAN SALDO ${months[prevMonthIdx]} ${prevYear}`;
+  if (isTransitioned) {
+    const prevMonthIdx = month === 1 ? 11 : month - 2;
+    const prevYear = month === 1 ? year - 1 : year;
+    return `PERPINDAHAN SALDO ${months[prevMonthIdx]} ${prevYear}`;
+  }
+  const currentMonthIdx = Math.max(0, Math.min(11, month - 1));
+  return `SALDO AWAL PEMBUKUAN ${months[currentMonthIdx]} ${year}`;
 }
 
 /**
@@ -58,11 +67,13 @@ export function LedgerTable({
   closingBalance,
   year,
   month,
+  isTransitioned = false,
   onRowClick,
   selectedRowId,
   className = '',
 }: LedgerTableProps) {
-  const openingDesc = getOpeningRowDescription(year, month);
+  const openingDesc = getOpeningRowDescription(year, month, isTransitioned);
+  const openingDateIso = `${year}-${String(month).padStart(2, '0')}-01`;
 
   return (
     <div
@@ -89,12 +100,12 @@ export function LedgerTable({
           </tr>
         </TableHeader>
         <TableBody>
-          {/* Baris 1: PERPINDAHAN SALDO BULAN SEBELUMNYA (NO = 1) */}
+          {/* Baris 1: SALDO AWAL PEMBUKUAN (NO = 1) */}
           <TableRow className="bg-[var(--surface-muted)]/50 font-medium">
             <TableCell stickyLeft alignCenter tabular className="text-[var(--ink-muted)]">
               1
             </TableCell>
-            <TableCell tabular>01 {month === 3 ? 'Mar' : 'Bln'} {year}</TableCell>
+            <TableCell tabular>{formatTxDate(openingDateIso)}</TableCell>
             <TableCell className="text-[var(--ink-subtle)]">—</TableCell>
             <TableCell className="font-semibold text-[var(--ink)]">
               {openingDesc}

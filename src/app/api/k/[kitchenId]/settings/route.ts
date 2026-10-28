@@ -3,6 +3,7 @@ import { kitchenRoute } from '@/server/http/kitchen-route';
 import { UpdateKitchenSettingsBodySchema } from '@/lib/schemas/kitchen-settings';
 import { defaultLedgerStore } from '@/server/ledger/service';
 import { getKitchenLedger as getSupabaseKitchenLedger } from '@/server/ledger/supabase-ledger';
+import { HttpError } from '@/server/http/errors';
 
 const EmptyQuerySchema = z.object({}).strict();
 
@@ -84,6 +85,27 @@ export const PATCH = kitchenRoute(
             .from('bank_accounts')
             .update({ bank_code: input.bankCode.trim().toUpperCase() })
             .eq('kitchen_id', kitchenId);
+        }
+
+        // Perbarui saldo awal pada periode aktif di Supabase jika disertakan
+        if (input.initialOpeningBalance !== undefined) {
+          const balanceBig = BigInt(input.initialOpeningBalance);
+          if (balanceBig < 0n || balanceBig > BigInt(Number.MAX_SAFE_INTEGER)) {
+            throw new HttpError(400, 'Saldo awal tidak valid.');
+          }
+
+          const { error: periodErr } = await supabase
+            .from('periods')
+            .update({ opening_balance: Number(balanceBig) })
+            .eq('kitchen_id', kitchenId)
+            .eq('status', 'open');
+
+          if (periodErr) {
+            throw new HttpError(
+              500,
+              `Gagal memperbarui saldo awal periode di Supabase: ${periodErr.message}`,
+            );
+          }
         }
 
         const { kitchen } = await getSupabaseKitchenLedger(supabase, kitchenId);

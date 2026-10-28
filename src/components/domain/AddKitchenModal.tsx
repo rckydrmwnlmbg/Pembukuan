@@ -13,6 +13,9 @@ interface AddKitchenModalProps {
 export function AddKitchenModal({ isOpen, onClose }: AddKitchenModalProps) {
   const router = useRouter();
 
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [pjName, setPjName] = useState('');
@@ -20,6 +23,8 @@ export function AddKitchenModal({ isOpen, onClose }: AddKitchenModalProps) {
   const [accountNo, setAccountNo] = useState('');
   const [openingBalance, setOpeningBalance] = useState('0');
   const [adminFeeDefault, setAdminFeeDefault] = useState('6500');
+  const [startMonth, setStartMonth] = useState<number>(currentMonth);
+  const [startYear, setStartYear] = useState<number>(currentYear);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -65,6 +70,8 @@ export function AddKitchenModal({ isOpen, onClose }: AddKitchenModalProps) {
           accountNo: accountNo.trim(),
           openingBalance: cleanBalance,
           adminFeeDefault: cleanFee,
+          month: Number(startMonth),
+          year: Number(startYear),
         }),
       });
 
@@ -196,6 +203,45 @@ export function AddKitchenModal({ isOpen, onClose }: AddKitchenModalProps) {
                 value={accountNo}
                 onChange={(e) => setAccountNo(e.target.value)}
                 placeholder="Contoh: 1234567890"
+                className="h-9 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-xs text-[var(--ink)] tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[var(--ink)]">
+                Bulan Mulai Pembukuan <span className="text-[var(--danger)]">*</span>
+              </label>
+              <select
+                value={startMonth}
+                onChange={(e) => setStartMonth(Number(e.target.value))}
+                className="h-9 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+              >
+                <option value={1}>Januari</option>
+                <option value={2}>Februari</option>
+                <option value={3}>Maret</option>
+                <option value={4}>April</option>
+                <option value={5}>Mei</option>
+                <option value={6}>Juni</option>
+                <option value={7}>Juli</option>
+                <option value={8}>Agustus</option>
+                <option value={9}>September</option>
+                <option value={10}>Oktober</option>
+                <option value={11}>November</option>
+                <option value={12}>Desember</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[var(--ink)]">
+                Tahun Mulai Pembukuan <span className="text-[var(--danger)]">*</span>
+              </label>
+              <input
+                type="number"
+                min={2020}
+                max={2050}
+                value={startYear}
+                onChange={(e) => setStartYear(Number(e.target.value))}
                 className="h-9 w-full rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-xs text-[var(--ink)] tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
               />
             </div>

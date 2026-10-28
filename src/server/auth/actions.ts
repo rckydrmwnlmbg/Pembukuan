@@ -44,6 +44,9 @@ export async function signInAction(formData: {
 
   // 2. Kredensial pengguna Supabase Auth nyata
   try {
+    const cookieStore = await cookies();
+    cookieStore.delete('kasdapur_session');
+
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,

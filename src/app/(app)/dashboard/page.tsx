@@ -3,6 +3,7 @@ import { requireUser } from '@/server/auth/require-user';
 import { defaultLedgerStore } from '@/server/ledger/service';
 import { listUserKitchens } from '@/server/ledger/supabase-ledger';
 import { DashboardSummary, type DashboardKitchenItem } from '@/components/domain/DashboardSummary';
+import { formatPeriodLabel } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,9 +59,13 @@ export default async function DashboardPage({
     redirect(`/k/${primaryKitchen.id}/ledger`);
   }
 
+  const activePeriodLabel = primaryKitchen
+    ? formatPeriodLabel(primaryKitchen.year, primaryKitchen.month)
+    : formatPeriodLabel(new Date().getFullYear(), new Date().getMonth() + 1);
+
   return (
     <div className="space-y-6">
-      <DashboardSummary kitchens={kitchens} selectedPeriodLabel="Maret 2026" />
+      <DashboardSummary kitchens={kitchens} selectedPeriodLabel={activePeriodLabel} />
     </div>
   );
 }

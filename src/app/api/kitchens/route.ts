@@ -17,6 +17,8 @@ const ManageKitchenSchema = z.object({
   accountNo: z.string().min(4).max(30).optional(),
   openingBalance: z.string().regex(/^\d+$/).optional(),
   adminFeeDefault: z.string().regex(/^\d+$/).optional(),
+  month: z.number().int().min(1).max(12).optional(),
+  year: z.number().int().min(2020).max(2050).optional(),
 });
 
 export const GET = userRoute(GetKitchensSchema, async ({ supabase, user }) => {
@@ -124,6 +126,8 @@ export const POST = userRoute(ManageKitchenSchema, async ({ supabase, user, inpu
           accountNo: input.accountNo,
           openingBalance: BigInt(input.openingBalance),
           adminFeeDefault: input.adminFeeDefault ? BigInt(input.adminFeeDefault) : 6_500n,
+          month: input.month,
+          year: input.year,
         });
         createdId = realCreated.id;
         createdPeriodId = realCreated.periodId;
@@ -145,6 +149,8 @@ export const POST = userRoute(ManageKitchenSchema, async ({ supabase, user, inpu
       accountNoLast4: input.accountNo.slice(-4),
       openingBalance: BigInt(input.openingBalance),
       adminFeeDefault: input.adminFeeDefault ? BigInt(input.adminFeeDefault) : 6_500n,
+      month: input.month,
+      year: input.year,
     });
 
     return Response.json({

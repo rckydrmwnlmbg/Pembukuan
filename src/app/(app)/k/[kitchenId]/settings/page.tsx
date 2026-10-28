@@ -17,7 +17,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { PeriodEquation } from '@/components/domain/PeriodEquation';
-import { formatRupiahNumber } from '@/lib/format';
+import { formatRupiahNumber, formatPeriodLabel } from '@/lib/format';
 
 interface KitchenSettingsData {
   id: string;
@@ -315,8 +315,19 @@ export default function KitchenSettingsPage({
       }
 
       setSettings((prev) => (prev ? { ...prev, ...resJson } : resJson));
+      setInitialOpeningBalance(resJson.openingBalance ?? initialOpeningBalance);
+      setSummary((prev) => {
+        const newOpening = BigInt(resJson.openingBalance ?? '0');
+        const inc = BigInt(prev.totalIncoming);
+        const out = BigInt(prev.totalOutgoing);
+        return {
+          ...prev,
+          openingBalance: resJson.openingBalance ?? prev.openingBalance,
+          closingBalance: (newOpening + inc - out).toString(),
+        };
+      });
       setNewAccountNo('');
-      setSuccessMsg('Pengaturan dapur berhasil disimpan.');
+      setSuccessMsg('Pengaturan dapur dan saldo awal berhasil disimpan.');
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Gagal menyimpan');
     } finally {
@@ -545,8 +556,8 @@ export default function KitchenSettingsPage({
             closingBalance={BigInt(summary.closingBalance)}
             incomingCount={summary.incomingCount}
             outgoingCount={summary.outgoingCount}
-            periodStartDate={`1 ${settings.month === 3 ? 'Mar' : 'Bulan'} ${settings.year}`}
-            lastTxDate={`28 ${settings.month === 3 ? 'Mar' : 'Bulan'} ${settings.year}`}
+            periodStartDate={`1 ${formatPeriodLabel(settings.year, settings.month)}`}
+            lastTxDate={`28 ${formatPeriodLabel(settings.year, settings.month)}`}
             draftCount={totalDrafts}
             variant="full"
             canLock={!isLocked}

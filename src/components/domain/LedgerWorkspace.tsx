@@ -93,7 +93,11 @@ function formatRecipientColumn(row: SerializedLedgerRow): string {
   return '';
 }
 
-function getOpeningRowDescription(year: number, month: number): string {
+function getOpeningRowDescription(
+  year: number,
+  month: number,
+  isTransitioned: boolean = false,
+): string {
   const months = [
     'JANUARI',
     'FEBRUARI',
@@ -108,9 +112,13 @@ function getOpeningRowDescription(year: number, month: number): string {
     'NOVEMBER',
     'DESEMBER',
   ];
-  const prevMonthIdx = month === 1 ? 11 : month - 2;
-  const prevYear = month === 1 ? year - 1 : year;
-  return `PERPINDAHAN SALDO ${months[prevMonthIdx]} ${prevYear}`;
+  if (isTransitioned) {
+    const prevMonthIdx = month === 1 ? 11 : month - 2;
+    const prevYear = month === 1 ? year - 1 : year;
+    return `PERPINDAHAN SALDO ${months[prevMonthIdx]} ${prevYear}`;
+  }
+  const currentMonthIdx = Math.max(0, Math.min(11, month - 1));
+  return `SALDO AWAL PEMBUKUAN ${months[currentMonthIdx]} ${year}`;
 }
 
 export function LedgerWorkspace({
@@ -670,7 +678,16 @@ export function LedgerWorkspace({
                   colSpan={3}
                   className="border-r border-[var(--line-subtle)] px-3 py-2 text-center font-semibold tracking-tight text-[var(--ink-primary)] truncate"
                 >
-                  {getOpeningRowDescription(kitchen.year, kitchen.month)}
+                  {getOpeningRowDescription(
+                    kitchen.year,
+                    kitchen.month,
+                    availablePeriods.some(
+                      (p) =>
+                        (p.year < kitchen.year ||
+                          (p.year === kitchen.year && p.month < kitchen.month)) &&
+                        p.status === 'locked',
+                    ),
+                  )}
                 </td>
                 <td className="border-r border-[var(--line-subtle)] px-2.5 py-2 text-right tabular-nums text-[var(--ok)] whitespace-nowrap">
                   {formatLedgerCellAmount(openingBalanceBig)}

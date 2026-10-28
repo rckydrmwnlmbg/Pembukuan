@@ -42,7 +42,38 @@ export async function requireUser(options: RequireUserOptions = {}) {
     env.NEXT_PUBLIC_DEMO === 'false' && env.APP_ENV === 'production';
   const isDemoAllowed = !isDemoForbidden;
 
-  // 1. Jika sesi demo aktif dan demo diizinkan
+  // 1. Pemeriksaan sesi Supabase Auth nyata terlebih dahulu (prioritas utama)
+  let supabase;
+  try {
+    supabase = await createClient();
+  } catch {
+    supabase = undefined;
+  }
+
+  if (supabase) {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (!error && user) {
+      const { data: aal } =
+        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal?.currentLevel !== 'aal2') {
+        if (!redirectOnFailure) {
+          throw new HttpError(
+            403,
+            'Verifikasi autentikasi dua faktor (MFA AAL2) diperlukan.',
+          );
+        }
+        redirect('/login/mfa');
+      }
+
+      return { supabase, user };
+    }
+  }
+
+  // 2. Jika tidak ada sesi Supabase Auth nyata, periksa sesi demo lokal (jika diizinkan)
   if (isDemoAllowed && demoSession === 'authenticated') {
     let supabaseClient;
     try {
@@ -90,46 +121,12 @@ export async function requireUser(options: RequireUserOptions = {}) {
     };
   }
 
-  // 2. Pemeriksaan sesi Supabase Auth nyata
-  let supabase;
-  try {
-    supabase = await createClient();
-  } catch {
-    if (!redirectOnFailure) {
-      throw new HttpError(
-        401,
-        'Sesi tidak valid atau telah berakhir. Silakan login terlebih dahulu.',
-      );
-    }
-    redirect('/login');
+  // 3. Tidak ada sesi yang valid
+  if (!redirectOnFailure) {
+    throw new HttpError(
+      401,
+      'Sesi tidak valid atau telah berakhir. Silakan login terlebih dahulu.',
+    );
   }
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    if (!redirectOnFailure) {
-      throw new HttpError(
-        401,
-        'Sesi tidak valid atau telah berakhir. Silakan login terlebih dahulu.',
-      );
-    }
-    redirect('/login');
-  }
-
-  const { data: aal } =
-    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aal?.currentLevel !== 'aal2') {
-    if (!redirectOnFailure) {
-      throw new HttpError(
-        403,
-        'Verifikasi autentikasi dua faktor (MFA AAL2) diperlukan.',
-      );
-    }
-    redirect('/login/mfa');
-  }
-
-  return { supabase, user };
+  redirect('/login');
 }
