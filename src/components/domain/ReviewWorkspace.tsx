@@ -35,7 +35,34 @@ export function ReviewWorkspace({
   );
 
   useEffect(() => {
-    setQueue(initialUploads.filter((u) => u.status !== 'posted'));
+    setQueue((prevQueue) => {
+      const serverUnposted = initialUploads.filter((u) => u.status !== 'posted');
+      const serverMap = new Map(serverUnposted.map((u) => [u.id, u]));
+
+      const merged: UploadRecord[] = [];
+      const seenIds = new Set<string>();
+
+      // 1. Pertahankan item di queue yang belum diposting (termasuk yang baru diunggah client)
+      for (const item of prevQueue) {
+        if (serverMap.has(item.id)) {
+          merged.push(serverMap.get(item.id)!);
+          seenIds.add(item.id);
+        } else if (item.status !== 'posted') {
+          merged.push(item);
+          seenIds.add(item.id);
+        }
+      }
+
+      // 2. Tambahkan item baru dari server yang belum ada di client
+      for (const item of serverUnposted) {
+        if (!seenIds.has(item.id)) {
+          merged.push(item);
+          seenIds.add(item.id);
+        }
+      }
+
+      return merged;
+    });
   }, [initialUploads]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [mobileTab, setMobileTab] = useState<'file' | 'form'>('form');
@@ -135,14 +162,14 @@ export function ReviewWorkspace({
 
   function handleUploaded(newRecords: UploadRecord[]) {
     setQueue((prev) => {
-      const next = [...newRecords, ...prev];
-      return next;
+      const existingIds = new Set(prev.map((r) => r.id));
+      const fresh = newRecords.filter((r) => !existingIds.has(r.id));
+      return [...fresh, ...prev];
     });
     setActiveIndex(0);
     setToastMessage(
-      `${newRecords.length} berkas bukti transfer ditambahkan ke antrean review.`,
+      `${newRecords.length} transaksi bukti transfer siap direview.`,
     );
-    router.refresh();
   }
 
   async function handlePostSubmit(e: React.FormEvent) {

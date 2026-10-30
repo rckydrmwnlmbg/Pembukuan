@@ -1,5 +1,7 @@
 import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { HttpError } from '@/server/http/errors';
 import { logger } from '@/server/logging/logger';
 import { hashForLookup } from '@/server/crypto/field';
@@ -103,6 +105,19 @@ function computeAccountHash(cleanDigits: string): string {
   );
 }
 
+const DEMO_STORE_DIR = path.join(process.cwd(), '.next', 'kasdapur-demo');
+const UPLOADS_FILE = path.join(DEMO_STORE_DIR, 'uploads.json');
+const DELETED_FILE = path.join(DEMO_STORE_DIR, 'deleted_uploads.json');
+const FILES_DIR = path.join(DEMO_STORE_DIR, 'files');
+
+function isDiskSyncEnabled(): boolean {
+  return (
+    typeof process !== 'undefined' &&
+    !process.env.VITEST &&
+    process.env.NODE_ENV !== 'test'
+  );
+}
+
 /**
  * Layanan unggahan bukti transfer, ekstraksi AI, deteksi dapur dari rekening pengirim,
  * aturan penerima (`counterparty_rules`), dan posting hasil review ke buku kas (M3).
@@ -116,6 +131,54 @@ export class UploadServiceStore {
   private readonly ledgerStore: LedgerServiceStore;
   private readonly organizationId = '00000000-0000-4000-8000-000000000099';
   private todayStr = '2026-03-28';
+
+  private syncFromDisk(): void {
+    if (!isDiskSyncEnabled()) return;
+    try {
+      if (fs.existsSync(DELETED_FILE)) {
+        const deletedArr = JSON.parse(
+          fs.readFileSync(DELETED_FILE, 'utf-8'),
+        ) as string[];
+        for (const id of deletedArr) {
+          this.deletedUploadIds.add(id);
+          this.uploads.delete(id);
+        }
+      }
+      if (fs.existsSync(UPLOADS_FILE)) {
+        const records = JSON.parse(
+          fs.readFileSync(UPLOADS_FILE, 'utf-8'),
+        ) as UploadRecord[];
+        for (const r of records) {
+          if (!this.deletedUploadIds.has(r.id)) {
+            this.uploads.set(r.id, r);
+          }
+        }
+      }
+    } catch {
+      // Abaikan jika belum ada atau gagal dibaca
+    }
+  }
+
+  private persistToDisk(): void {
+    if (!isDiskSyncEnabled()) return;
+    try {
+      if (!fs.existsSync(DEMO_STORE_DIR)) {
+        fs.mkdirSync(DEMO_STORE_DIR, { recursive: true });
+      }
+      fs.writeFileSync(
+        UPLOADS_FILE,
+        JSON.stringify(Array.from(this.uploads.values())),
+        'utf-8',
+      );
+      fs.writeFileSync(
+        DELETED_FILE,
+        JSON.stringify(Array.from(this.deletedUploadIds)),
+        'utf-8',
+      );
+    } catch {
+      // Abaikan jika tidak dapat menulis ke disk
+    }
+  }
 
   constructor(ledgerStore: LedgerServiceStore = defaultLedgerStore, seed = 20261025) {
     this.ledgerStore = ledgerStore;
@@ -231,6 +294,8 @@ export class UploadServiceStore {
         createdAt: '2026-03-28T09:15:00.000Z',
       });
     }
+
+    this.syncFromDisk();
   }
 
   public setTodayForTesting(todayIso: string): void {
@@ -262,6 +327,7 @@ export class UploadServiceStore {
     kitchenId: string,
     statusFilter: 'all' | 'reviewable' | 'parsed' | 'needs_manual' | 'posted' = 'all',
   ): UploadRecord[] {
+    this.syncFromDisk();
     // Pastikan dapur valid
     this.ledgerStore.getKitchenLedger(kitchenId);
 
@@ -286,6 +352,9 @@ export class UploadServiceStore {
     kitchenId: string,
     uploadId: string,
   ): UploadRecord {
+    if (!this.uploads.has(uploadId)) {
+      this.syncFromDisk();
+    }
     const u = this.uploads.get(uploadId);
     if (!u || u.kitchenId !== kitchenId) {
       throw new HttpError(404, 'Tidak ditemukan');
@@ -302,7 +371,7 @@ export class UploadServiceStore {
     uploadId: string,
   ): Promise<{ bytes: Uint8Array; mime: string; displayName: string }> {
     const u = this.getKitchenUploadOrThrow(kitchenId, uploadId);
-    const cached = this.fileBytesStore.get(u.storagePath);
+    const cached = this.getCachedFileBytes(u.storagePath);
     if (cached) {
       return {
         bytes: cached,
@@ -325,7 +394,7 @@ export class UploadServiceStore {
       blurSigma: u.status === 'needs_manual' ? 4 : undefined,
     });
     const arr = new Uint8Array(pngBuffer);
-    this.fileBytesStore.set(u.storagePath, arr);
+    this.saveFileBytes(u.storagePath, arr);
 
     return {
       bytes: arr,
@@ -336,10 +405,41 @@ export class UploadServiceStore {
 
   public saveFileBytes(storagePath: string, bytes: Uint8Array): void {
     this.fileBytesStore.set(storagePath, bytes);
+    if (!isDiskSyncEnabled()) return;
+    try {
+      const safePath = path.join(
+        FILES_DIR,
+        storagePath.replace(/[/\\?%*:|"<>]/g, '_'),
+      );
+      const dir = path.dirname(safePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(safePath, Buffer.from(bytes));
+    } catch {
+      // Abaikan jika tidak dapat menulis ke disk
+    }
   }
 
   public getCachedFileBytes(storagePath: string): Uint8Array | undefined {
-    return this.fileBytesStore.get(storagePath);
+    const mem = this.fileBytesStore.get(storagePath);
+    if (mem) return mem;
+    if (!isDiskSyncEnabled()) return undefined;
+    try {
+      const safePath = path.join(
+        FILES_DIR,
+        storagePath.replace(/[/\\?%*:|"<>]/g, '_'),
+      );
+      if (fs.existsSync(safePath)) {
+        const b = fs.readFileSync(safePath);
+        const arr = new Uint8Array(b);
+        this.fileBytesStore.set(storagePath, arr);
+        return arr;
+      }
+    } catch {
+      // Abaikan jika tidak dapat membaca berkas
+    }
+    return undefined;
   }
 
   /**
@@ -394,6 +494,7 @@ export class UploadServiceStore {
       );
     }
 
+    this.syncFromDisk();
     const ledgerData = this.ledgerStore.getKitchenLedger(kitchenId);
     const kitchenMeta = ledgerData.kitchen;
     const existingRefs = new Set<string>(
@@ -431,7 +532,7 @@ export class UploadServiceStore {
       }
 
       // Simpan byte yang sudah dinormalisasi (tanpa EXIF) di memori/Storage privat
-      this.fileBytesStore.set(
+      this.saveFileBytes(
         normalized.storagePath,
         new Uint8Array(normalized.bytes),
       );
@@ -660,6 +761,8 @@ export class UploadServiceStore {
       );
     }
 
+    this.persistToDisk();
+
     return results;
   }
 
@@ -678,6 +781,7 @@ export class UploadServiceStore {
     summary: PeriodBalanceSummary;
     savedRule: CounterpartyRuleRecord | null;
   } {
+    this.syncFromDisk();
     const upload = this.getKitchenUploadOrThrow(kitchenId, uploadId);
     if (upload.status === 'posted') {
       throw new HttpError(
@@ -741,6 +845,7 @@ export class UploadServiceStore {
 
     upload.status = 'posted';
     upload.postedTransactionId = created[0]?.id ?? null;
+    this.persistToDisk();
 
     logger.info(
       {
@@ -765,6 +870,7 @@ export class UploadServiceStore {
    * Menolak bila bukti transfer sudah diposting ke transaksi.
    */
   public deleteUpload(kitchenId: string, uploadId: string): void {
+    this.syncFromDisk();
     const upload = this.getKitchenUploadOrThrow(kitchenId, uploadId);
     if (upload.status === 'posted') {
       throw new HttpError(
@@ -776,6 +882,7 @@ export class UploadServiceStore {
     this.deletedUploadIds.add(uploadId);
     this.uploads.delete(uploadId);
     this.fileBytesStore.delete(upload.storagePath);
+    this.persistToDisk();
 
     logger.info(
       {
