@@ -1,4 +1,6 @@
 import 'server-only';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   computePeriodLedger,
   type ComputedLedgerRow,
@@ -66,6 +68,53 @@ function serializeEntryForAudit(entry: LedgerEntryInput): Record<string, unknown
   };
 }
 
+const DEMO_STORE_DIR = path.join(process.cwd(), '.next', 'kasdapur-demo');
+const KITCHENS_FILE = path.join(DEMO_STORE_DIR, 'kitchens.json');
+
+interface SerializedKitchenRecord {
+  kitchen: {
+    id: string;
+    organizationId: string;
+    code: string;
+    name: string;
+    pjName: string;
+    bankCode: string;
+    accountNo: string;
+    accountNoLast4: string;
+    openingBalance: string;
+    adminFeeDefault: string;
+    highAmountThreshold: string;
+    periodId: string;
+    year: number;
+    month: number;
+    periodStatus: 'open' | 'locked';
+    nextPeriodOpeningBalance: string | null;
+    pendingDraftCount: number;
+    needsManualCount: number;
+    lastUploadDate: string;
+  };
+  entries: Array<{
+    id: string;
+    kitchenId: string;
+    periodId: string;
+    parentTransactionId: string | null;
+    seqNo: number;
+    txDate: string;
+    kind: 'incoming' | 'outgoing' | 'admin_fee';
+    referenceNo: string | null;
+    description: string;
+    counterpartyAccount: string | null;
+    counterpartyAccountLast4: string | null;
+    counterpartyName: string | null;
+    counterpartyBank: string | null;
+    debit: string;
+    credit: string;
+    note: string | null;
+    status: 'posted' | 'void';
+    version: number;
+  }>;
+}
+
 /**
  * Penyimpanan buku kas terisolasi per dapur untuk mode demo/uji dan operasi layanan server.
  * Menegakkan seluruh invarian database di lapisan layanan:
@@ -78,6 +127,103 @@ function serializeEntryForAudit(entry: LedgerEntryInput): Record<string, unknown
  */
 export class LedgerServiceStore {
   private readonly states = new Map<string, KitchenLedgerState>();
+
+  private syncKitchensFromDisk(): void {
+    if (
+      typeof process === 'undefined' ||
+      process.env.VITEST ||
+      process.env.NODE_ENV === 'test'
+    ) {
+      return;
+    }
+    try {
+      if (fs.existsSync(KITCHENS_FILE)) {
+        const raw = fs.readFileSync(KITCHENS_FILE, 'utf-8');
+        const list = JSON.parse(raw) as SerializedKitchenRecord[];
+        for (const item of list) {
+          const k = item.kitchen;
+          const existing = this.states.get(k.id);
+          const entries = (item.entries || []).map((e) => ({
+            ...e,
+            debit: BigInt(e.debit),
+            credit: BigInt(e.credit),
+          }));
+          const kitchenData: Omit<DemoKitchen, 'entries' | 'summary'> = {
+            ...k,
+            openingBalance: BigInt(k.openingBalance),
+            adminFeeDefault: BigInt(k.adminFeeDefault),
+            highAmountThreshold: BigInt(k.highAmountThreshold),
+            nextPeriodOpeningBalance: k.nextPeriodOpeningBalance
+              ? BigInt(k.nextPeriodOpeningBalance)
+              : null,
+          };
+          if (!existing) {
+            this.states.set(k.id, {
+              kitchen: kitchenData,
+              entries,
+              auditLogs: [],
+            });
+          } else {
+            existing.kitchen = kitchenData;
+            existing.entries = entries;
+          }
+        }
+      }
+    } catch {
+      // Abaikan jika berkas belum ada
+    }
+  }
+
+  private persistKitchensToDisk(): void {
+    if (
+      typeof process === 'undefined' ||
+      process.env.VITEST ||
+      process.env.NODE_ENV === 'test'
+    ) {
+      return;
+    }
+    try {
+      if (!fs.existsSync(DEMO_STORE_DIR)) {
+        fs.mkdirSync(DEMO_STORE_DIR, { recursive: true });
+      }
+      const serialized: SerializedKitchenRecord[] = Array.from(
+        this.states.values(),
+      ).map((st) => ({
+        kitchen: {
+          ...st.kitchen,
+          openingBalance: st.kitchen.openingBalance.toString(),
+          adminFeeDefault: st.kitchen.adminFeeDefault.toString(),
+          highAmountThreshold: st.kitchen.highAmountThreshold.toString(),
+          nextPeriodOpeningBalance: st.kitchen.nextPeriodOpeningBalance
+            ? st.kitchen.nextPeriodOpeningBalance.toString()
+            : null,
+        },
+        entries: st.entries.map((e) => ({
+          id: e.id,
+          kitchenId: e.kitchenId ?? st.kitchen.id,
+          periodId: e.periodId ?? st.kitchen.periodId,
+          parentTransactionId: e.parentTransactionId ?? null,
+          seqNo: e.seqNo,
+          txDate: e.txDate,
+          kind: e.kind,
+          referenceNo: e.referenceNo ?? null,
+          description: e.description,
+          counterpartyAccount: e.counterpartyAccount ?? null,
+          counterpartyAccountLast4: e.counterpartyAccountLast4 ?? null,
+          counterpartyName: e.counterpartyName ?? null,
+          counterpartyBank: e.counterpartyBank ?? null,
+          note: e.note ?? null,
+          status: e.status,
+          version: e.version ?? 1,
+          debit: e.debit.toString(),
+          credit: e.credit.toString(),
+        })),
+      }));
+      fs.writeFileSync(KITCHENS_FILE, JSON.stringify(serialized), 'utf-8');
+    } catch {
+      // Abaikan jika tidak dapat menulis ke disk
+    }
+  }
 
   constructor(seed = 20261025) {
     const dataset = generateDemoDataset(seed);
@@ -94,11 +240,13 @@ export class LedgerServiceStore {
         auditLogs: [],
       });
     }
+    this.syncKitchensFromDisk();
   }
 
   public listKitchenMeta(): Array<
     Omit<DemoKitchen, 'entries'> & { summary: PeriodBalanceSummary }
   > {
+    this.syncKitchensFromDisk();
     const result: Array<
       Omit<DemoKitchen, 'entries'> & { summary: PeriodBalanceSummary }
     > = [];
@@ -128,9 +276,12 @@ export class LedgerServiceStore {
       year?: number;
       month?: number;
     },
+    customKitchenId?: string,
+    customPeriodId?: string,
   ): Omit<DemoKitchen, 'entries'> & { summary: PeriodBalanceSummary } {
-    const kitchenId = crypto.randomUUID();
-    const periodId = crypto.randomUUID();
+    this.syncKitchensFromDisk();
+    const kitchenId = customKitchenId ?? crypto.randomUUID();
+    const periodId = customPeriodId ?? crypto.randomUUID();
     const year = input.year ?? 2026;
     const month = input.month ?? 3;
     const openingBalance = input.openingBalance;
@@ -138,7 +289,10 @@ export class LedgerServiceStore {
 
     const normalizedCode = input.code.trim().toUpperCase();
     for (const st of this.states.values()) {
-      if (st.kitchen.code.toUpperCase() === normalizedCode) {
+      if (
+        st.kitchen.code.toUpperCase() === normalizedCode &&
+        st.kitchen.id !== kitchenId
+      ) {
         throw new HttpError(409, `Kode dapur ${normalizedCode} sudah digunakan.`);
       }
     }
@@ -188,6 +342,7 @@ export class LedgerServiceStore {
     };
 
     this.states.set(kitchenId, newState);
+    this.persistKitchensToDisk();
 
     const { summary } = computePeriodLedger(openingBalance, []);
     return {
@@ -206,6 +361,7 @@ export class LedgerServiceStore {
     for (const id of idsToRemove) {
       this.states.delete(id);
     }
+    this.persistKitchensToDisk();
   }
 
   public getKitchen(
@@ -223,7 +379,11 @@ export class LedgerServiceStore {
   }
 
   private getKitchenStateOrThrow(kitchenId: string): KitchenLedgerState {
-    const st = this.states.get(kitchenId);
+    let st = this.states.get(kitchenId);
+    if (!st) {
+      this.syncKitchensFromDisk();
+      st = this.states.get(kitchenId);
+    }
     if (!st) {
       throw new HttpError(404, 'Tidak ditemukan');
     }
@@ -432,6 +592,8 @@ export class LedgerServiceStore {
       });
     }
 
+    this.persistKitchensToDisk();
+
     const { rows, summary } = computePeriodLedger(
       st.kitchen.openingBalance,
       st.entries,
@@ -567,6 +729,8 @@ export class LedgerServiceStore {
       });
     }
 
+    this.persistKitchensToDisk();
+
     const { rows, summary } = computePeriodLedger(
       st.kitchen.openingBalance,
       st.entries,
@@ -674,6 +838,8 @@ export class LedgerServiceStore {
       }
     }
 
+    this.persistKitchensToDisk();
+
     const { summary } = computePeriodLedger(
       st.kitchen.openingBalance,
       st.entries,
@@ -766,6 +932,8 @@ export class LedgerServiceStore {
       createdAt: nowIso,
     });
 
+    this.persistKitchensToDisk();
+
     const { summary } = computePeriodLedger(
       st.kitchen.openingBalance,
       st.entries,
@@ -806,6 +974,8 @@ export class LedgerServiceStore {
       after: { openingBalance: openingBalance.toString() },
       createdAt: nowIso,
     });
+
+    this.persistKitchensToDisk();
 
     const { summary } = computePeriodLedger(
       st.kitchen.openingBalance,
@@ -879,6 +1049,8 @@ export class LedgerServiceStore {
       createdAt: nowIso,
     });
 
+    this.persistKitchensToDisk();
+
     return {
       periodId,
       status: 'locked',
@@ -944,6 +1116,8 @@ export class LedgerServiceStore {
       },
       createdAt: nowIso,
     });
+
+    this.persistKitchensToDisk();
 
     return {
       periodId,
@@ -1013,6 +1187,8 @@ export class LedgerServiceStore {
       },
       createdAt: nowIso,
     });
+
+    this.persistKitchensToDisk();
 
     return {
       periodId: newPeriodId,

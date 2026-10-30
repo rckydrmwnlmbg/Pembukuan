@@ -113,10 +113,11 @@ export const POST = userRoute(ManageKitchenSchema, async ({ supabase, user, inpu
     }
 
     // 1. Simpan ke Supabase jika terhubung
-    let createdId = crypto.randomUUID();
-    let createdPeriodId = crypto.randomUUID();
+    const isSupabase = Boolean(supabase && user.id !== '00000000-0000-4000-8000-000000000001');
+    let realCreatedKitchenId: string | undefined;
+    let realCreatedPeriodId: string | undefined;
 
-    if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
+    if (isSupabase && supabase) {
       try {
         const realCreated = await createSupabaseKitchen(supabase, user.id, {
           name: input.name,
@@ -129,8 +130,8 @@ export const POST = userRoute(ManageKitchenSchema, async ({ supabase, user, inpu
           month: input.month,
           year: input.year,
         });
-        createdId = realCreated.id;
-        createdPeriodId = realCreated.periodId;
+        realCreatedKitchenId = realCreated.id;
+        realCreatedPeriodId = realCreated.periodId;
       } catch (err: unknown) {
         // Jika gagal di database nyata, lemparkan pesan galat sebenarnya
         throw new HttpError(
@@ -141,28 +142,36 @@ export const POST = userRoute(ManageKitchenSchema, async ({ supabase, user, inpu
     }
 
     // 2. Simpan juga ke in-memory store agar sinkron
-    const created = defaultLedgerStore.createKitchen(user.id, {
-      name: input.name,
-      code: input.code,
-      pjName: input.pjName,
-      bankCode: input.bankCode,
-      accountNoLast4: input.accountNo.slice(-4),
-      openingBalance: BigInt(input.openingBalance),
-      adminFeeDefault: input.adminFeeDefault ? BigInt(input.adminFeeDefault) : 6_500n,
-      month: input.month,
-      year: input.year,
-    });
+    const created = defaultLedgerStore.createKitchen(
+      user.id,
+      {
+        name: input.name,
+        code: input.code,
+        pjName: input.pjName,
+        bankCode: input.bankCode,
+        accountNoLast4: input.accountNo.slice(-4),
+        openingBalance: BigInt(input.openingBalance),
+        adminFeeDefault: input.adminFeeDefault ? BigInt(input.adminFeeDefault) : 6_500n,
+        month: input.month,
+        year: input.year,
+      },
+      realCreatedKitchenId,
+      realCreatedPeriodId,
+    );
+
+    const finalKitchenId = realCreatedKitchenId || created.id;
+    const finalPeriodId = realCreatedPeriodId || created.periodId;
 
     return Response.json({
       success: true,
       kitchen: {
-        id: createdId || created.id,
+        id: finalKitchenId,
         code: input.code.toUpperCase(),
         name: input.name,
         pjName: input.pjName,
         bankCode: input.bankCode.toUpperCase(),
         accountNoLast4: input.accountNo.slice(-4),
-        periodId: createdPeriodId || created.periodId,
+        periodId: finalPeriodId,
       },
     });
   }

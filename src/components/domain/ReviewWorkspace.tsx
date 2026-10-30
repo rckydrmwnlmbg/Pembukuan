@@ -95,6 +95,9 @@ export function ReviewWorkspace({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
+  const [isBatchPosting, setIsBatchPosting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -281,6 +284,119 @@ export function ReviewWorkspace({
       setErrorMessage('Gagal menghubungi server saat menolak berkas.');
     } finally {
       setIsRejecting(false);
+    }
+  }
+
+  async function handleBatchPostSubmit() {
+    if (queue.length === 0) return;
+    setErrorMessage(null);
+    setIsBatchPosting(true);
+    setShowBatchConfirm(false);
+
+    let postedCount = 0;
+    const remainingQueue = [...queue];
+
+    try {
+      for (let i = 0; i < queue.length; i++) {
+        const item = queue[i]!;
+        setBatchProgress({ current: i + 1, total: queue.length });
+
+        const itemTxDate =
+          (item.id === activeItem?.id ? txDate : item.txDate) || '2026-03-28';
+        const itemRefNo =
+          (item.id === activeItem?.id ? referenceNo : item.referenceNo) || null;
+        const itemAmount =
+          (item.id === activeItem?.id ? amount : item.amount) || '0';
+        const itemCleanAmount = itemAmount.replace(/\D/g, '');
+        const itemDesc = (
+          item.id === activeItem?.id
+            ? description
+            : item.suggestedDescription || item.memo || 'Pengeluaran kas dapur'
+        ).trim();
+        const itemRecipientAcc =
+          (item.id === activeItem?.id ? recipientAccount : item.recipientAccount) ||
+          null;
+        const itemRecipientName =
+          (item.id === activeItem?.id ? recipientName : item.recipientName) || null;
+        const itemRecipientBank =
+          (item.id === activeItem?.id ? recipientBank : item.recipientBank) || null;
+        const itemIncludeFee =
+          item.id === activeItem?.id
+            ? includeAdminFee
+            : item.suggestedIncludeAdminFee;
+        const itemFeeAmount =
+          (item.id === activeItem?.id
+            ? adminFeeAmount
+            : item.suggestedAdminFeeAmount) || kitchen.adminFeeDefault;
+        const isPayroll = Boolean(
+          item.memo?.toLowerCase().includes('payroll') ||
+            item.suggestedDescription?.toLowerCase().includes('payroll'),
+        );
+
+        const res = await fetch(
+          `/api/k/${kitchen.id}/uploads/${item.id}/post`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              periodId: kitchen.periodId,
+              txDate: itemTxDate.trim(),
+              kind: 'outgoing',
+              referenceNo: itemRefNo ? itemRefNo.trim() : null,
+              description: itemDesc || 'Pengeluaran kas dapur',
+              amount: itemCleanAmount,
+              counterpartyAccount: itemRecipientAcc ? itemRecipientAcc.trim() : null,
+              counterpartyName: isPayroll
+                ? 'Rekening Masing-Masing Relawan'
+                : itemRecipientName ? itemRecipientName.trim() : null,
+              counterpartyBank: itemRecipientBank ? itemRecipientBank.trim() : null,
+              note: item.memo || null,
+              includeAdminFee: itemIncludeFee,
+              adminFeeAmount: itemIncludeFee ? itemFeeAmount.replace(/\D/g, '') : undefined,
+              confirmWrongKitchen: true,
+              saveCounterpartyRule: false,
+              isPayrollMassal: isPayroll,
+            }),
+          },
+        );
+
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as {
+            error?: string | { message?: string };
+          };
+          const errDetail =
+            typeof data.error === 'string'
+              ? data.error
+              : data.error?.message || 'Gagal memposting transaksi';
+          throw new Error(
+            `Transaksi #${i + 1} (${item.originalName}): ${errDetail}`,
+          );
+        }
+
+        postedCount++;
+        const removeIdx = remainingQueue.findIndex((q) => q.id === item.id);
+        if (removeIdx !== -1) {
+          remainingQueue.splice(removeIdx, 1);
+        }
+      }
+
+      setQueue([]);
+      setActiveIndex(0);
+      setToastMessage(
+        `Semua ${postedCount} transaksi berhasil diposting ke buku kas!`,
+      );
+      router.refresh();
+    } catch (err: unknown) {
+      setQueue([...remainingQueue]);
+      setActiveIndex(0);
+      setErrorMessage(
+        err instanceof Error
+          ? `${err.message}. Sebanyak ${postedCount} transaksi sebelumnya telah berhasil dicatat ke buku kas.`
+          : 'Terjadi kesalahan saat memposting transaksi massal.',
+      );
+    } finally {
+      setIsBatchPosting(false);
+      setBatchProgress(null);
     }
   }
 
@@ -838,26 +954,46 @@ export function ReviewWorkspace({
                 <Button
                   type="button"
                   variant="danger"
-                  disabled={isSubmitting || isRejecting}
+                  disabled={isSubmitting || isRejecting || isBatchPosting}
                   onClick={() => setShowRejectConfirm(true)}
                 >
                   Tolak Berkas
                 </Button>
                 <Button
                   variant="secondary"
-                  disabled={queue.length <= 1}
+                  disabled={queue.length <= 1 || isBatchPosting}
                   onClick={() =>
                     setActiveIndex((prev) => (prev + 1) % queue.length)
                   }
                 >
                   Lewati
                 </Button>
+                {queue.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={
+                      isSubmitting ||
+                      isRejecting ||
+                      isBatchPosting ||
+                      kitchen.periodStatus === 'locked'
+                    }
+                    onClick={() => setShowBatchConfirm(true)}
+                  >
+                    {isBatchPosting
+                      ? `Memposting (${batchProgress?.current ?? 0}/${batchProgress?.total ?? queue.length})...`
+                      : `Posting Semua (${queue.length})`}
+                  </Button>
+                )}
                 <Button
                   type="submit"
                   form="review-post-form"
                   variant="primary"
                   disabled={
-                    isSubmitting || isRejecting || kitchen.periodStatus === 'locked'
+                    isSubmitting ||
+                    isRejecting ||
+                    isBatchPosting ||
+                    kitchen.periodStatus === 'locked'
                   }
                 >
                   {isSubmitting ? 'Menyimpan...' : 'Simpan dan lanjut'}
@@ -904,6 +1040,46 @@ export function ReviewWorkspace({
                     onClick={() => void handleRejectSubmit()}
                   >
                     {isRejecting ? 'Menghapus...' : 'Ya, Tolak & Hapus dari Antrean'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Konfirmasi Posting Semua Transaksi Massal */}
+          {showBatchConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+              <div className="w-full max-w-md rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl space-y-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-[var(--ink-primary)]">
+                    Posting Semua {queue.length} Transaksi ke Buku Kas?
+                  </h3>
+                  <p className="text-xs text-[var(--ink-secondary)] leading-relaxed">
+                    Sistem akan memverifikasi dan memposting seluruh{' '}
+                    <strong className="text-[var(--ink-primary)]">
+                      {queue.length} transaksi
+                    </strong>{' '}
+                    dari dokumen bukti transfer ini secara otomatis ke buku kas {kitchen.name} (Periode {kitchen.periodLabel}).
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 border-t border-[var(--line)] pt-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={isBatchPosting}
+                    onClick={() => setShowBatchConfirm(false)}
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={isBatchPosting}
+                    loading={isBatchPosting}
+                    onClick={() => void handleBatchPostSubmit()}
+                  >
+                    Ya, Posting Semua ({queue.length})
                   </Button>
                 </div>
               </div>
