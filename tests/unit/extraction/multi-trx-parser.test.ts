@@ -83,4 +83,59 @@ describe('BNI Direct Multi-Transaction PDF Table Parser', () => {
     expect(result[1]!.recipientName).toBe('REKANAN SINTETIS DUA');
     expect(result[1]!.recipientAccount).toBe('1122334455');
   });
+
+  it('mengabaikan transaksi Ditolak dan mendukung baris Payroll massal', async () => {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([800, 600]);
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+
+    page.drawText('TRANSACTION STATUS REPORT', { x: 50, y: 550, font, size: 10 });
+
+    // Baris 1: Transaksi Ditolak (gagal bank) -> harus diabaikan
+    const rejectedTokens = [
+      '202610090000000099',
+      'Online Transfer',
+      'IDR',
+      '80,000',
+      '09-Oct-2026',
+      'Ditolak',
+      'Bank',
+      'BCA',
+      'REKANAN GAGAL',
+      '4090527245',
+      'Web',
+    ];
+    let x = 50;
+    for (const t of rejectedTokens) {
+      page.drawText(t, { x, y: 500, font, size: 9 });
+      x += 40;
+    }
+
+    // Baris 2: In House Payroll
+    const payrollTokens = [
+      '202610090000000100',
+      'In House Payroll',
+      'IDR',
+      '4,920,000',
+      '09-Oct-2026',
+      'Berhasil',
+      'Dijalankan',
+      'Web',
+    ];
+    x = 50;
+    for (const t of payrollTokens) {
+      page.drawText(t, { x, y: 450, font, size: 9 });
+      x += 40;
+    }
+
+    const bytes = await doc.save();
+    const result = await detectAndParseMultiTrxPdf(bytes);
+
+    // Hanya baris payroll yang masuk (baris ditolak diabaikan)
+    expect(result.length).toBe(1);
+    expect(result[0]!.referenceNo).toBe('202610090000000100');
+    expect(result[0]!.amount).toBe('4920000');
+    expect(result[0]!.recipientName).toBe('Rekening Masing-Masing Karyawan/Relawan');
+    expect(result[0]!.recipientBank).toBe('BNI');
+  });
 });

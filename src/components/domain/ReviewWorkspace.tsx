@@ -92,7 +92,12 @@ export function ReviewWorkspace({
     );
     setConfirmWrongKitchen(false);
     setSaveCounterpartyRule(true);
-    setIsPayrollMassal(false);
+    const isPayroll =
+      Boolean(activeItem.memo?.toLowerCase().includes('payroll')) ||
+      Boolean(
+        activeItem.suggestedDescription?.toLowerCase().includes('payroll'),
+      );
+    setIsPayrollMassal(isPayroll);
     setZoomPercent(100);
     setPanOffset({ x: 0, y: 0 });
     setErrorMessage(null);
@@ -862,7 +867,7 @@ export function ReviewWorkspace({
                     disabled={isRejecting}
                     onClick={() => setShowRejectConfirm(false)}
                   >
-                    Batal
+                    Batal (Kembali)
                   </Button>
                   <Button
                     variant="danger"
@@ -871,7 +876,7 @@ export function ReviewWorkspace({
                     loading={isRejecting}
                     onClick={() => void handleRejectSubmit()}
                   >
-                    {isRejecting ? 'Menghapus...' : 'Ya, Tolak Berkas'}
+                    {isRejecting ? 'Menghapus...' : 'Ya, Tolak & Hapus dari Antrean'}
                   </Button>
                 </div>
               </div>

@@ -95,7 +95,7 @@ export function UploadDropzone({
           error?: string | { message?: string };
         };
 
-        if (!res.ok || !data.uploaded?.[0]) {
+        if (!res.ok || !data.uploaded || data.uploaded.length === 0) {
           const errMsg =
             typeof data.error === 'string'
               ? data.error
@@ -109,16 +109,26 @@ export function UploadDropzone({
           continue;
         }
 
-        const record = data.uploaded[0];
-        createdRecords.push(record);
-        nextFeedback.push({
-          name: record.originalName,
-          state: record.status === 'needs_manual' ? 'needs_manual' : 'parsed',
-          detail:
-            record.status === 'needs_manual'
-              ? (record.fallbackReason ?? 'Perlu input manual di layar review.')
-              : 'Siap direview',
-        });
+        // Simpan seluruh record transaksi hasil ekstraksi (bisa multi transaksi dari 1 PDF)
+        createdRecords.push(...data.uploaded);
+
+        if (data.uploaded.length > 1) {
+          nextFeedback.push({
+            name: `${file.name} (${data.uploaded.length} transaksi)`,
+            state: 'parsed',
+            detail: `${data.uploaded.length} transaksi berhasil diekstrak dan siap direview.`,
+          });
+        } else {
+          const record = data.uploaded[0]!;
+          nextFeedback.push({
+            name: record.originalName,
+            state: record.status === 'needs_manual' ? 'needs_manual' : 'parsed',
+            detail:
+              record.status === 'needs_manual'
+                ? (record.fallbackReason ?? 'Perlu input manual di layar review.')
+                : 'Siap direview',
+          });
+        }
       } catch {
         nextFeedback.push({
           name: file.name,

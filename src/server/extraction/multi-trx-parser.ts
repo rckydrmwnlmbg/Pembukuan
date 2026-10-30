@@ -126,6 +126,8 @@ export async function detectAndParseMultiTrxPdf(
             if (t === 'Online Transfer') {
               service = 'Online Transfer';
               isOnline = true;
+            } else if (t.includes('Payroll')) {
+              service = 'In House Payroll';
             } else if (t.includes('In House')) {
               service = 'In House Transfer to Third Party Account';
             }
@@ -143,18 +145,38 @@ export async function detectAndParseMultiTrxPdf(
             j++;
           }
 
-          // Cari nama penerima, rekening tujuan, dan bank di antara 'Berhasil Dijalankan' dan 'Web'
+          // Cari status transaksi ('Berhasil', 'Ditolak', 'Gagal', dll.)
+          let statusToken = '';
+          let statusIdx = -1;
+          for (let k = i; k < j; k++) {
+            const tk = tokens[k] ?? '';
+            if (tk === 'Berhasil' || tk === 'Ditolak' || tk === 'Gagal') {
+              statusToken = tk;
+              statusIdx = k;
+              break;
+            }
+          }
+
+          // Transaksi yang ditolak/gagal oleh bank tidak didebit dari rekening kas (bukan pengeluaran riil)
+          if (statusToken === 'Ditolak' || statusToken === 'Gagal') {
+            continue;
+          }
+
+          // Cari nama penerima, rekening tujuan, dan bank di antara status dan 'Web'
           let recipientName = '';
           let recipientBank = '';
           let recipientAccount = '';
 
-          const berhasilIdx = tokens.indexOf('Berhasil', i);
-          if (berhasilIdx !== -1 && berhasilIdx < j) {
+          if (statusIdx !== -1) {
             const nameTokens: string[] = [];
             const bankTokens: string[] = [];
             let readingBank = isOnline;
 
-            for (let k = berhasilIdx + 2; k < j; k++) {
+            // Jika status 'Berhasil Dijalankan', mulai setelah kata 'Dijalankan'
+            const startK =
+              tokens[statusIdx + 1] === 'Dijalankan' ? statusIdx + 2 : statusIdx + 1;
+
+            for (let k = startK; k < j; k++) {
               const tk = tokens[k] ?? '';
               if (
                 tk === 'Web' ||
@@ -201,6 +223,12 @@ export async function detectAndParseMultiTrxPdf(
             recipientName = nameTokens.join(' ').trim();
             recipientBank =
               bankTokens.join(' ').trim() || (isOnline ? 'BANK LAIN' : 'BNI');
+          }
+
+          // Dukungan khusus payroll massal (In House Payroll)
+          if (service.includes('Payroll') && !recipientName) {
+            recipientName = 'Rekening Masing-Masing Karyawan/Relawan';
+            recipientBank = 'BNI';
           }
 
           if (amount > 0n && txDate) {

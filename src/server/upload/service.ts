@@ -416,7 +416,8 @@ export class UploadServiceStore {
       for (const existing of this.uploads.values()) {
         if (
           existing.kitchenId === kitchenId &&
-          existing.sha256 === normalized.sha256 &&
+          (existing.sha256 === normalized.sha256 ||
+            existing.sha256 === `${normalized.sha256}_0`) &&
           existing.status !== 'failed'
         ) {
           const refInfo = existing.referenceNo
