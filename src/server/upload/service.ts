@@ -371,7 +371,10 @@ export class UploadServiceStore {
     uploadId: string,
   ): Promise<{ bytes: Uint8Array; mime: string; displayName: string }> {
     const u = this.getKitchenUploadOrThrow(kitchenId, uploadId);
-    const cached = this.getCachedFileBytes(u.storagePath);
+    const basePath = u.storagePath.split('#')[0]!;
+    const cached =
+      this.getCachedFileBytes(basePath) ||
+      this.getCachedFileBytes(u.storagePath);
     if (cached) {
       return {
         bytes: cached,
@@ -440,6 +443,11 @@ export class UploadServiceStore {
       // Abaikan jika tidak dapat membaca berkas
     }
     return undefined;
+  }
+
+  public saveMultiTrxRecord(rec: UploadRecord): void {
+    this.uploads.set(rec.id, rec);
+    this.persistToDisk();
   }
 
   /**
@@ -566,15 +574,21 @@ export class UploadServiceStore {
                   mRow.recipientBank.trim().toUpperCase() !==
                     kitchenMeta.bankCode.trim().toUpperCase();
 
+                const itemSha256 = createHash('sha256')
+                  .update(`${normalized.sha256}:${mIdx}`)
+                  .digest('hex');
+                const itemStoragePath = `${normalized.storagePath}#item-${mIdx + 1}`;
+                const itemOriginalName = `${normalized.displayName} (#${mIdx + 1} - ${mRow.recipientName})`.slice(0, 120);
+
                 const rec: UploadRecord = {
                   id: mUploadId,
                   kitchenId,
                   periodId: kitchenMeta.periodId,
-                  storagePath: normalized.storagePath,
-                  originalName: `${normalized.displayName} (#${mIdx + 1} - ${mRow.recipientName})`,
+                  storagePath: itemStoragePath,
+                  originalName: itemOriginalName,
                   mime: normalized.mediaType,
                   sizeBytes: normalized.bytes.byteLength,
-                  sha256: `${normalized.sha256}_${mIdx}`,
+                  sha256: itemSha256,
                   status: 'parsed',
                   parserUsed: 'ai',
                   txDate: mRow.txDate,

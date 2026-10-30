@@ -1,4 +1,5 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/server/supabase/admin';
 import { encryptField, hashForLookup, extractLast4Digits } from '@/server/crypto/field';
@@ -1441,6 +1442,12 @@ export async function processBatchUploadToSupabase(
                 mRow.recipientBank.trim().toUpperCase() !==
                   kitchenMeta.bankCode.trim().toUpperCase();
 
+              const itemSha256 = createHash('sha256')
+                .update(`${normalized.sha256}:${mIdx}`)
+                .digest('hex');
+              const itemStoragePath = `${normalized.storagePath}#item-${mIdx + 1}`;
+              const itemOriginalName = `${normalized.displayName} (#${mIdx + 1} - ${mRow.recipientName})`.slice(0, 120);
+
               const parseResultObj = {
                 txDate: mRow.txDate,
                 referenceNo: mRow.referenceNo,
@@ -1467,15 +1474,15 @@ export async function processBatchUploadToSupabase(
                 postedTransactionId: null,
               };
 
-              await supabase.from('uploads').insert({
+              const { error: insErr } = await supabase.from('uploads').insert({
                 id: mUploadId,
                 kitchen_id: kitchenId,
                 period_id: kitchenMeta.periodId,
-                storage_path: normalized.storagePath,
-                original_name: `${normalized.displayName} (#${mIdx + 1} - ${mRow.recipientName})`,
+                storage_path: itemStoragePath,
+                original_name: itemOriginalName,
                 mime: normalized.mediaType,
                 size_bytes: normalized.bytes.byteLength,
-                sha256: `${normalized.sha256}_${mIdx}`,
+                sha256: itemSha256,
                 status: 'parsed',
                 parser_used: 'ai',
                 parse_result: parseResultObj,
@@ -1483,15 +1490,19 @@ export async function processBatchUploadToSupabase(
                 uploaded_by: userId,
               });
 
-              results.push({
+              if (insErr) {
+                logger.error({ insErr, mUploadId, mIdx }, 'gagal_insert_upload_row_multi_trx');
+              }
+
+              const rec: UploadRecord = {
                 id: mUploadId,
                 kitchenId,
                 periodId: kitchenMeta.periodId,
-                storagePath: normalized.storagePath,
-                originalName: `${normalized.displayName} (#${mIdx + 1} - ${mRow.recipientName})`,
+                storagePath: itemStoragePath,
+                originalName: itemOriginalName,
                 mime: normalized.mediaType,
                 sizeBytes: normalized.bytes.byteLength,
-                sha256: `${normalized.sha256}_${mIdx}`,
+                sha256: itemSha256,
                 status: 'parsed',
                 parserUsed: 'ai',
                 txDate: mRow.txDate,
@@ -1519,7 +1530,10 @@ export async function processBatchUploadToSupabase(
                 postedTransactionId: null,
                 uploadedBy: userId,
                 createdAt: new Date().toISOString(),
-              });
+              };
+
+              results.push(rec);
+              defaultUploadStore.saveMultiTrxRecord(rec);
             }
             continue;
           }
@@ -1749,8 +1763,12 @@ export async function getSupabaseUploadFileBytes(
     throw new HttpError(404, 'Berkas unggahan tidak ditemukan.');
   }
 
+  const basePath = uploadRow.storage_path.split('#')[0]!;
+
   // 1. Cek memory cache lokal
-  const cached = defaultUploadStore.getCachedFileBytes(uploadRow.storage_path);
+  const cached =
+    defaultUploadStore.getCachedFileBytes(basePath) ||
+    defaultUploadStore.getCachedFileBytes(uploadRow.storage_path);
   if (cached) {
     return {
       bytes: cached,
@@ -1764,12 +1782,12 @@ export async function getSupabaseUploadFileBytes(
     const admin = createAdminClient();
     const { data: fileData, error: dlErr } = await admin.storage
       .from('uploads')
-      .download(uploadRow.storage_path);
+      .download(basePath);
 
     if (!dlErr && fileData) {
       const buf = await fileData.arrayBuffer();
       const arr = new Uint8Array(buf);
-      defaultUploadStore.saveFileBytes(uploadRow.storage_path, arr);
+      defaultUploadStore.saveFileBytes(basePath, arr);
       return {
         bytes: arr,
         mime: uploadRow.mime,
@@ -1783,12 +1801,12 @@ export async function getSupabaseUploadFileBytes(
   try {
     const { data: fileData, error: dlErr } = await supabase.storage
       .from('uploads')
-      .download(uploadRow.storage_path);
+      .download(basePath);
 
     if (!dlErr && fileData) {
       const buf = await fileData.arrayBuffer();
       const arr = new Uint8Array(buf);
-      defaultUploadStore.saveFileBytes(uploadRow.storage_path, arr);
+      defaultUploadStore.saveFileBytes(basePath, arr);
       return {
         bytes: arr,
         mime: uploadRow.mime,

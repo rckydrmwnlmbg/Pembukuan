@@ -17,7 +17,11 @@ export const DELETE = kitchenRoute(
     const { uploadId } = ParamsSchema.parse(params);
 
     if (supabase && user.id !== '00000000-0000-4000-8000-000000000001') {
-      await deleteSupabaseUpload(supabase, kitchenId, uploadId);
+      try {
+        await deleteSupabaseUpload(supabase, kitchenId, uploadId);
+      } catch {
+        defaultUploadStore.deleteUpload(kitchenId, uploadId);
+      }
       return Response.json({
         success: true,
         uploadId,
