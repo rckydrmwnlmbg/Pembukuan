@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { UploadCloud, FileSpreadsheet, Calendar } from 'lucide-react';
@@ -129,13 +129,23 @@ export function LedgerWorkspace({
   reviewQueueCount = 0,
 }: LedgerWorkspaceProps) {
   const router = useRouter();
-  const [rows, setRows] = useState< readonly SerializedLedgerRow[]>(initialRows);
+  const [isPending, startTransition] = useTransition();
+  const [rows, setRows] = useState<readonly SerializedLedgerRow[]>(initialRows);
   const [summary, setSummary] =
     useState<SerializedPeriodSummary>(initialSummary);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'posted' | 'void'>(
     'all',
   );
+
+  // Sinkronisasi data rows & summary saat user berpindah periode atau props diperbarui
+  useEffect(() => {
+    setRows(initialRows);
+    setSummary(initialSummary);
+    setSearchQuery('');
+    setStatusFilter('all');
+  }, [initialRows, initialSummary, kitchen.periodId]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [bannerMessage, setBannerMessage] = useState<{
     tone: 'success' | 'error';
@@ -188,8 +198,10 @@ export function LedgerWorkspace({
         throw new Error(data.error?.message || data.error || 'Gagal membuat periode baru.');
       }
       setShowAddPeriodModal(false);
-      router.push(`/k/${kitchen.id}/ledger?periodId=${data.period.id}`);
-      router.refresh();
+      startTransition(() => {
+        router.push(`/k/${kitchen.id}/ledger?periodId=${data.period.id}`);
+        router.refresh();
+      });
     } catch (err: unknown) {
       setAddPeriodError(err instanceof Error ? err.message : 'Terjadi galat');
     } finally {
@@ -491,8 +503,27 @@ export function LedgerWorkspace({
   const closingBalanceBig = BigInt(summary.closingBalance);
   const openingDateIso = `${kitchen.year}-${String(kitchen.month).padStart(2, '0')}-01`;
 
+  const isAnyProcessing =
+    isPending ||
+    isLoading ||
+    isSubmitting ||
+    addPeriodLoading ||
+    editOpeningLoading;
+
   return (
     <div className="space-y-4">
+      {/* Top Indeterminate Progress Bar */}
+      {isAnyProcessing && (
+        <div
+          role="progressbar"
+          aria-label="Sedang memproses data"
+          aria-busy="true"
+          className="fixed top-0 left-0 right-0 h-1 z-50 overflow-hidden bg-[var(--accent-subtle)] pointer-events-none"
+        >
+          <div className="progress-bar-indeterminate bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+        </div>
+      )}
+
       {/* Header Konteks Dapur Aktif */}
       <div className="flex flex-col gap-4 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-2xs lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
@@ -507,19 +538,27 @@ export function LedgerWorkspace({
 
             {/* Pemilih Periode Pembukuan - Selalu Interaktif & Dapat Diklik */}
             <div className="flex items-center gap-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface-muted)] px-2.5 py-1">
-              <Calendar className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
+              {isPending ? (
+                <div className="h-3.5 w-3.5 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin shrink-0" />
+              ) : (
+                <Calendar className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
+              )}
               <span className="text-[11px] font-medium text-[var(--ink-muted)]">Periode:</span>
               <select
                 value={kitchen.periodId}
+                disabled={isPending}
                 onChange={(e) => {
-                  if (e.target.value === '__add_new__') {
+                  const targetPeriodId = e.target.value;
+                  if (targetPeriodId === '__add_new__') {
                     setShowAddPeriodModal(true);
                   } else {
-                    router.push(`/k/${kitchen.id}/ledger?periodId=${e.target.value}`);
+                    startTransition(() => {
+                      router.push(`/k/${kitchen.id}/ledger?periodId=${targetPeriodId}`);
+                    });
                   }
                 }}
                 aria-label="Pilih Periode Pembukuan"
-                className="bg-transparent text-xs font-semibold text-[var(--ink)] focus:outline-none cursor-pointer"
+                className="bg-transparent text-xs font-semibold text-[var(--ink)] focus:outline-none cursor-pointer disabled:opacity-50"
               >
                 {availablePeriods.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -688,7 +727,17 @@ export function LedgerWorkspace({
       </form>
 
       {/* Tabel Buku Kas 11 Kolom Format Plombokan (DESIGN.md §5.3) */}
-      <div className="overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface)] shadow-2xs">
+      <div className="relative overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface)] shadow-2xs">
+        {(isPending || isLoading) && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/75 backdrop-blur-[1px] transition-all">
+            <div className="flex items-center gap-3 px-5 py-3 rounded-lg bg-[var(--surface)] border border-[var(--line-strong)] shadow-lg">
+              <div className="h-4 w-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin shrink-0" />
+              <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">
+                {isPending ? 'Memuat data periode...' : 'Memfilter transaksi...'}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="max-h-[640px] overflow-auto">
           <table className="w-full min-w-[1360px] border-collapse text-left text-sm table-fixed">
             <colgroup>

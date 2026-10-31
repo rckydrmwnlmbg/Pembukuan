@@ -87,15 +87,33 @@ export default async function KitchenLedgerPage({
   );
 
   if (availablePeriods.length === 0) {
-    availablePeriods = [
-      {
-        id: ledgerData.kitchen.periodId,
-        year: ledgerData.kitchen.year,
-        month: ledgerData.kitchen.month,
-        status: ledgerData.kitchen.periodStatus,
-        label: periodLabel,
-      },
-    ];
+    if (!supabase || user.id === '00000000-0000-4000-8000-000000000001') {
+      try {
+        const demoPeriods = defaultLedgerStore.listKitchenPeriods(kitchenId);
+        if (demoPeriods && demoPeriods.length > 0) {
+          availablePeriods = demoPeriods.map((p) => ({
+            id: p.id,
+            year: p.year,
+            month: p.month,
+            status: p.status,
+            label: formatPeriodLabel(p.year, p.month),
+          }));
+        }
+      } catch {
+        // Abaikan jika store belum ada
+      }
+    }
+    if (availablePeriods.length === 0) {
+      availablePeriods = [
+        {
+          id: ledgerData.kitchen.periodId,
+          year: ledgerData.kitchen.year,
+          month: ledgerData.kitchen.month,
+          status: ledgerData.kitchen.periodStatus,
+          label: periodLabel,
+        },
+      ];
+    }
   }
 
   const serializedKitchen: SerializedKitchenInfo = {
@@ -167,6 +185,7 @@ export default async function KitchenLedgerPage({
   return (
     <main className="space-y-5">
       <LedgerWorkspace
+        key={serializedKitchen.periodId}
         kitchen={serializedKitchen}
         availablePeriods={availablePeriods}
         initialRows={serializedRows}

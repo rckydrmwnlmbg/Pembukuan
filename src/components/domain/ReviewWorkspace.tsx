@@ -410,8 +410,22 @@ export function ReviewWorkspace({
       ? formatRupiah(BigInt(cleanAmountDigits))
       : null;
 
+  const isAnyProcessing = isSubmitting || isRejecting || isBatchPosting;
+
   return (
     <div className="space-y-4 pb-20">
+      {/* Top Indeterminate Progress Bar */}
+      {isAnyProcessing && (
+        <div
+          role="progressbar"
+          aria-label="Sedang memproses posting"
+          aria-busy="true"
+          className="fixed top-0 left-0 right-0 h-1 z-50 overflow-hidden bg-[var(--accent-subtle)] pointer-events-none"
+        >
+          <div className="progress-bar-indeterminate bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+        </div>
+      )}
+
       {/* Header Halaman Review */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-subtle bg-surface p-4">
         <div>
@@ -1062,6 +1076,25 @@ export function ReviewWorkspace({
                     dari dokumen bukti transfer ini secara otomatis ke buku kas {kitchen.name} (Periode {kitchen.periodLabel}).
                   </p>
                 </div>
+
+                {isBatchPosting && batchProgress && (
+                  <div className="space-y-2 rounded-lg border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3">
+                    <div className="flex justify-between text-xs font-medium text-[var(--ink)]">
+                      <span>Memposting transaksi ke buku kas...</span>
+                      <span className="tabular-nums font-semibold">
+                        {batchProgress.current} dari {batchProgress.total} ({Math.round((batchProgress.current / batchProgress.total) * 100)}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-[var(--surface-subtle)] rounded-full h-2 overflow-hidden border border-[var(--line)]">
+                      <div
+                        className="bg-[var(--accent)] h-2 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${Math.round((batchProgress.current / batchProgress.total) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-end gap-2 border-t border-[var(--line)] pt-3">
                   <Button

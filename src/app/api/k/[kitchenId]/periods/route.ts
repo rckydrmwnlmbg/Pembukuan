@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { kitchenRoute } from '@/server/http/kitchen-route';
 import { Rupiah } from '@/lib/schemas/common';
 import { HttpError } from '@/server/http/errors';
+import { defaultLedgerStore } from '@/server/ledger/service';
 
 export const CreatePeriodBodySchema = z
   .object({
@@ -68,17 +69,21 @@ export const POST = kitchenRoute(
       );
     }
 
-    // Mock fallback
-    const newPeriodId = crypto.randomUUID();
+    // Fallback in-memory/demo store
+    const newPeriod = defaultLedgerStore.createPeriod(kitchenId, {
+      year: input.year,
+      month: input.month,
+      openingBalance: openingBig,
+    });
     return Response.json(
       {
         success: true,
         period: {
-          id: newPeriodId,
-          year: input.year,
-          month: input.month,
-          openingBalance: openingBig.toString(),
-          status: 'open',
+          id: newPeriod.id,
+          year: newPeriod.year,
+          month: newPeriod.month,
+          openingBalance: newPeriod.openingBalance.toString(),
+          status: newPeriod.status,
         },
       },
       { status: 201 },

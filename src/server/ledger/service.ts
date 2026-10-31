@@ -40,8 +40,18 @@ export interface AuditRecord {
   createdAt: string;
 }
 
+export interface PeriodRecord {
+  id: string;
+  kitchenId: string;
+  year: number;
+  month: number;
+  openingBalance: bigint;
+  status: 'open' | 'locked';
+}
+
 export interface KitchenLedgerState {
   kitchen: Omit<DemoKitchen, 'entries' | 'summary'>;
+  periods?: PeriodRecord[];
   entries: LedgerEntryInput[];
   auditLogs: AuditRecord[];
 }
@@ -93,6 +103,14 @@ interface SerializedKitchenRecord {
     needsManualCount: number;
     lastUploadDate: string;
   };
+  periods?: Array<{
+    id: string;
+    kitchenId: string;
+    year: number;
+    month: number;
+    openingBalance: string;
+    status: 'open' | 'locked';
+  }>;
   entries: Array<{
     id: string;
     kitchenId: string;
@@ -157,14 +175,32 @@ export class LedgerServiceStore {
               ? BigInt(k.nextPeriodOpeningBalance)
               : null,
           };
+          const periods: PeriodRecord[] =
+            item.periods && item.periods.length > 0
+              ? item.periods.map((p) => ({
+                  ...p,
+                  openingBalance: BigInt(p.openingBalance),
+                }))
+              : [
+                  {
+                    id: k.periodId,
+                    kitchenId: k.id,
+                    year: k.year,
+                    month: k.month,
+                    openingBalance: BigInt(k.openingBalance),
+                    status: k.periodStatus,
+                  },
+                ];
           if (!existing) {
             this.states.set(k.id, {
               kitchen: kitchenData,
+              periods,
               entries,
               auditLogs: [],
             });
           } else {
             existing.kitchen = kitchenData;
+            existing.periods = periods;
             existing.entries = entries;
           }
         }
@@ -198,6 +234,19 @@ export class LedgerServiceStore {
             ? st.kitchen.nextPeriodOpeningBalance.toString()
             : null,
         },
+        periods: (st.periods || [
+          {
+            id: st.kitchen.periodId,
+            kitchenId: st.kitchen.id,
+            year: st.kitchen.year,
+            month: st.kitchen.month,
+            openingBalance: st.kitchen.openingBalance,
+            status: st.kitchen.periodStatus,
+          },
+        ]).map((p) => ({
+          ...p,
+          openingBalance: p.openingBalance.toString(),
+        })),
         entries: st.entries.map((e) => ({
           id: e.id,
           kitchenId: e.kitchenId ?? st.kitchen.id,
@@ -231,6 +280,16 @@ export class LedgerServiceStore {
       const { entries, summary: _summary, ...kitchenMeta } = k;
       this.states.set(k.id, {
         kitchen: kitchenMeta,
+        periods: [
+          {
+            id: k.periodId,
+            kitchenId: k.id,
+            year: k.year,
+            month: k.month,
+            openingBalance: k.openingBalance,
+            status: k.periodStatus,
+          },
+        ],
         entries: entries.map((e) => ({
           ...e,
           kitchenId: k.id,
@@ -319,8 +378,18 @@ export class LedgerServiceStore {
       lastUploadDate: '-',
     };
 
+    const initialPeriod: PeriodRecord = {
+      id: periodId,
+      kitchenId,
+      year,
+      month,
+      openingBalance,
+      status: 'open',
+    };
+
     const newState: KitchenLedgerState = {
       kitchen: newKitchen,
+      periods: [initialPeriod],
       entries: [],
       auditLogs: [
         {
@@ -364,6 +433,72 @@ export class LedgerServiceStore {
     this.persistKitchensToDisk();
   }
 
+  public createPeriod(
+    kitchenId: string,
+    input: {
+      year: number;
+      month: number;
+      openingBalance: bigint;
+    },
+  ): PeriodRecord {
+    const st = this.getKitchenStateOrThrow(kitchenId);
+    if (!st.periods || st.periods.length === 0) {
+      st.periods = [
+        {
+          id: st.kitchen.periodId,
+          kitchenId: st.kitchen.id,
+          year: st.kitchen.year,
+          month: st.kitchen.month,
+          openingBalance: st.kitchen.openingBalance,
+          status: st.kitchen.periodStatus,
+        },
+      ];
+    }
+
+    const existing = st.periods.find(
+      (p) => p.year === input.year && p.month === input.month,
+    );
+    if (existing) {
+      throw new HttpError(
+        409,
+        `Periode ${input.month}/${input.year} sudah terdaftar pada dapur ini.`,
+      );
+    }
+
+    const newPeriod: PeriodRecord = {
+      id: crypto.randomUUID(),
+      kitchenId,
+      year: input.year,
+      month: input.month,
+      openingBalance: input.openingBalance,
+      status: 'open',
+    };
+
+    st.periods.push(newPeriod);
+    this.persistKitchensToDisk();
+    return newPeriod;
+  }
+
+  public listKitchenPeriods(kitchenId: string): PeriodRecord[] {
+    const st = this.getKitchenStateOrThrow(kitchenId);
+    if (!st.periods || st.periods.length === 0) {
+      st.periods = [
+        {
+          id: st.kitchen.periodId,
+          kitchenId: st.kitchen.id,
+          year: st.kitchen.year,
+          month: st.kitchen.month,
+          openingBalance: st.kitchen.openingBalance,
+          status: st.kitchen.periodStatus,
+        },
+      ];
+    }
+    return [...st.periods].sort((a, b) => {
+      if (b.year !== a.year) return b.year - a.year;
+      return b.month - a.month;
+    });
+  }
+
   public getKitchen(
     kitchenId: string,
   ): Omit<DemoKitchen, 'entries'> & { summary: PeriodBalanceSummary } {
@@ -391,8 +526,20 @@ export class LedgerServiceStore {
   }
 
   private assertPeriodOpen(st: KitchenLedgerState, periodId?: string): void {
-    if (periodId && periodId !== st.kitchen.periodId) {
-      throw new HttpError(404, 'Periode tidak ditemukan pada dapur ini.');
+    if (periodId) {
+      const p = st.periods?.find((x) => x.id === periodId);
+      if (p) {
+        if (p.status === 'locked') {
+          throw new HttpError(
+            409,
+            'Periode terkunci. Transaksi pada periode yang sudah dikunci tidak dapat ditambah, diubah, atau dibatalkan.',
+          );
+        }
+        return;
+      }
+      if (periodId !== st.kitchen.periodId) {
+        throw new HttpError(404, 'Periode tidak ditemukan pada dapur ini.');
+      }
     }
     if (st.kitchen.periodStatus === 'locked') {
       throw new HttpError(
@@ -442,13 +589,39 @@ export class LedgerServiceStore {
     auditLogs: readonly AuditRecord[];
   } {
     const st = this.getKitchenStateOrThrow(kitchenId);
-    if (options?.periodId && options.periodId !== st.kitchen.periodId) {
-      throw new HttpError(404, 'Periode tidak ditemukan pada dapur ini.');
+    if (!st.periods || st.periods.length === 0) {
+      st.periods = [
+        {
+          id: st.kitchen.periodId,
+          kitchenId: st.kitchen.id,
+          year: st.kitchen.year,
+          month: st.kitchen.month,
+          openingBalance: st.kitchen.openingBalance,
+          status: st.kitchen.periodStatus,
+        },
+      ];
     }
 
+    let targetPeriod: PeriodRecord | undefined;
+    if (options?.periodId) {
+      targetPeriod = st.periods.find((p) => p.id === options.periodId);
+      if (!targetPeriod && options.periodId !== st.kitchen.periodId) {
+        throw new HttpError(404, 'Periode tidak ditemukan pada dapur ini.');
+      }
+    }
+    if (!targetPeriod) {
+      targetPeriod =
+        st.periods.find((p) => p.id === st.kitchen.periodId) ??
+        st.periods[0]!;
+    }
+
+    const periodEntries = st.entries.filter(
+      (e) => (e.periodId ?? st.kitchen.periodId) === targetPeriod!.id,
+    );
+
     const { rows, summary } = computePeriodLedger(
-      st.kitchen.openingBalance,
-      st.entries,
+      targetPeriod.openingBalance,
+      periodEntries,
     );
 
     const needle = options?.q?.trim().toLowerCase() ?? '';
@@ -466,8 +639,17 @@ export class LedgerServiceStore {
       return inDesc || inRef || inName || inAccount;
     });
 
+    const activeKitchen: Omit<DemoKitchen, 'entries' | 'summary'> = {
+      ...st.kitchen,
+      periodId: targetPeriod.id,
+      year: targetPeriod.year,
+      month: targetPeriod.month,
+      periodStatus: targetPeriod.status,
+      openingBalance: targetPeriod.openingBalance,
+    };
+
     return {
-      kitchen: st.kitchen,
+      kitchen: activeKitchen,
       rows,
       filteredRows,
       summary,
@@ -961,6 +1143,10 @@ export class LedgerServiceStore {
 
     const prev = st.kitchen.openingBalance;
     st.kitchen.openingBalance = openingBalance;
+    const p = st.periods?.find((x) => x.id === periodId);
+    if (p) {
+      p.openingBalance = openingBalance;
+    }
 
     const nowIso = new Date().toISOString();
     st.auditLogs.push({
@@ -1032,6 +1218,10 @@ export class LedgerServiceStore {
 
     st.kitchen.periodStatus = 'locked';
     st.kitchen.nextPeriodOpeningBalance = summary.closingBalance;
+    const pLock = st.periods?.find((x) => x.id === periodId);
+    if (pLock) {
+      pLock.status = 'locked';
+    }
 
     const nowIso = new Date().toISOString();
     st.auditLogs.push({
@@ -1100,6 +1290,10 @@ export class LedgerServiceStore {
 
     st.kitchen.periodStatus = 'open';
     st.kitchen.nextPeriodOpeningBalance = null;
+    const pUnlockTarget = st.periods?.find((x) => x.id === periodId);
+    if (pUnlockTarget) {
+      pUnlockTarget.status = 'open';
+    }
 
     const nowIso = new Date().toISOString();
     st.auditLogs.push({
@@ -1165,6 +1359,18 @@ export class LedgerServiceStore {
     st.kitchen.openingBalance = nextOpening;
     st.kitchen.periodStatus = 'open';
     st.kitchen.nextPeriodOpeningBalance = null;
+    const newPeriod: PeriodRecord = {
+      id: newPeriodId,
+      kitchenId,
+      year: nextYear,
+      month: nextMonth,
+      openingBalance: nextOpening,
+      status: 'open',
+    };
+    if (!st.periods) {
+      st.periods = [];
+    }
+    st.periods.push(newPeriod);
     st.kitchen.pendingDraftCount = 0;
     st.kitchen.needsManualCount = 0;
     st.entries = [];
