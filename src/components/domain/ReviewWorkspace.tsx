@@ -291,7 +291,6 @@ export function ReviewWorkspace({
     if (queue.length === 0) return;
     setErrorMessage(null);
     setIsBatchPosting(true);
-    setShowBatchConfirm(false);
 
     let postedCount = 0;
     const remainingQueue = [...queue];
@@ -382,6 +381,7 @@ export function ReviewWorkspace({
 
       setQueue([]);
       setActiveIndex(0);
+      setShowBatchConfirm(false);
       setToastMessage(
         `Semua ${postedCount} transaksi berhasil diposting ke buku kas!`,
       );
@@ -389,6 +389,7 @@ export function ReviewWorkspace({
     } catch (err: unknown) {
       setQueue([...remainingQueue]);
       setActiveIndex(0);
+      setShowBatchConfirm(false);
       setErrorMessage(
         err instanceof Error
           ? `${err.message}. Sebanyak ${postedCount} transaksi sebelumnya telah berhasil dicatat ke buku kas.`

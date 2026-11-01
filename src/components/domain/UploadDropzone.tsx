@@ -39,6 +39,10 @@ export function UploadDropzone({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [feedbackList, setFeedbackList] = useState<FileUploadFeedback[]>([]);
 
   async function processSelectedFiles(fileList: FileList | null) {
@@ -58,6 +62,7 @@ export function UploadDropzone({
     }
 
     setIsUploading(true);
+    setUploadProgress({ current: 0, total: files.length });
     setFeedbackList(
       files.map((f) => ({
         name: f.name,
@@ -69,13 +74,24 @@ export function UploadDropzone({
     const nextFeedback: FileUploadFeedback[] = [];
     const createdRecords: UploadRecord[] = [];
 
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]!;
+      setUploadProgress({ current: i + 1, total: files.length });
+
       if (file.size > 10 * 1024 * 1024) {
         nextFeedback.push({
           name: file.name,
           state: 'rejected',
           detail: 'Ukuran berkas melebihi batas maksimum 10 MB per file.',
         });
+        setFeedbackList([
+          ...nextFeedback,
+          ...files.slice(i + 1).map((f) => ({
+            name: f.name,
+            state: 'processing' as const,
+            detail: 'Menunggu giliran proses...',
+          })),
+        ]);
         continue;
       }
 
@@ -106,28 +122,27 @@ export function UploadDropzone({
             state: 'rejected',
             detail: errMsg,
           });
-          continue;
-        }
-
-        // Simpan seluruh record transaksi hasil ekstraksi (bisa multi transaksi dari 1 PDF)
-        createdRecords.push(...data.uploaded);
-
-        if (data.uploaded.length > 1) {
-          nextFeedback.push({
-            name: `${file.name} (${data.uploaded.length} transaksi)`,
-            state: 'parsed',
-            detail: `${data.uploaded.length} transaksi berhasil diekstrak dan siap direview.`,
-          });
         } else {
-          const record = data.uploaded[0]!;
-          nextFeedback.push({
-            name: record.originalName,
-            state: record.status === 'needs_manual' ? 'needs_manual' : 'parsed',
-            detail:
-              record.status === 'needs_manual'
-                ? (record.fallbackReason ?? 'Perlu input manual di layar review.')
-                : 'Siap direview',
-          });
+          // Simpan seluruh record transaksi hasil ekstraksi (bisa multi transaksi dari 1 PDF)
+          createdRecords.push(...data.uploaded);
+
+          if (data.uploaded.length > 1) {
+            nextFeedback.push({
+              name: `${file.name} (${data.uploaded.length} transaksi)`,
+              state: 'parsed',
+              detail: `${data.uploaded.length} transaksi berhasil diekstrak dan siap direview.`,
+            });
+          } else {
+            const record = data.uploaded[0]!;
+            nextFeedback.push({
+              name: record.originalName,
+              state: record.status === 'needs_manual' ? 'needs_manual' : 'parsed',
+              detail:
+                record.status === 'needs_manual'
+                  ? (record.fallbackReason ?? 'Perlu input manual di layar review.')
+                  : 'Siap direview',
+            });
+          }
         }
       } catch {
         nextFeedback.push({
@@ -136,10 +151,20 @@ export function UploadDropzone({
           detail: 'Gagal menghubungi server saat mengunggah berkas.',
         });
       }
+
+      setFeedbackList([
+        ...nextFeedback,
+        ...files.slice(i + 1).map((f) => ({
+          name: f.name,
+          state: 'processing' as const,
+          detail: 'Menunggu giliran proses...',
+        })),
+      ]);
     }
 
     setFeedbackList(nextFeedback);
     setIsUploading(false);
+    setUploadProgress(null);
     if (createdRecords.length > 0) {
       onUploaded(createdRecords);
     }
@@ -197,6 +222,25 @@ export function UploadDropzone({
           <span className="text-xs text-ink-muted">atau seret file ke sini</span>
         </div>
       </div>
+
+      {isUploading && uploadProgress && (
+        <div className="mt-4 space-y-1.5 rounded-lg border border-[var(--line-subtle)] bg-[var(--surface-muted)] p-3">
+          <div className="flex justify-between text-xs font-medium text-[var(--ink)]">
+            <span>Memvalidasi dan mengekstrak berkas...</span>
+            <span className="tabular-nums font-semibold">
+              {uploadProgress.current} dari {uploadProgress.total} ({Math.round((uploadProgress.current / uploadProgress.total) * 100)}%)
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-subtle)] border border-[var(--line)]">
+            <div
+              className="h-full bg-[var(--accent)] transition-all duration-300 rounded-full"
+              style={{
+                width: `${Math.round((uploadProgress.current / uploadProgress.total) * 100)}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {feedbackList.length > 0 ? (
         <ul

@@ -554,6 +554,7 @@ export function LedgerWorkspace({
                   } else {
                     startTransition(() => {
                       router.push(`/k/${kitchen.id}/ledger?periodId=${targetPeriodId}`);
+                      router.refresh();
                     });
                   }
                 }}
