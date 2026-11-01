@@ -198,18 +198,17 @@ export async function createSanitizedPlombokanTemplate(
  */
 export async function exportPlombokanXlsx(
   input: PlombokanExportInput,
-  templatePath = path.resolve(
-    process.cwd(),
-    'tests/fixtures/template/plombokan-template.xlsx',
-  ),
+  templatePath?: string,
 ): Promise<PlombokanExportResult> {
-  if (!fs.existsSync(/*turbopackIgnore: true*/ templatePath)) {
-    await createSanitizedPlombokanTemplate(templatePath);
-  }
-
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(templatePath);
-  const ws = wb.getWorksheet('Sheet1') ?? wb.worksheets[0] ?? wb.addWorksheet('Sheet1');
+  let ws: ExcelJS.Worksheet;
+
+  if (templatePath && fs.existsSync(templatePath)) {
+    await wb.xlsx.readFile(templatePath);
+    ws = wb.getWorksheet('Sheet1') ?? wb.worksheets[0] ?? wb.addWorksheet('Sheet1');
+  } else {
+    ws = wb.addWorksheet('Sheet1');
+  }
 
   // Pastikan lebar kolom dan format sesuai templat sumber
   PLOMBOKAN_COLUMN_WIDTHS.forEach((width, idx) => {

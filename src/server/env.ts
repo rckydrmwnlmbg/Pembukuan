@@ -55,7 +55,22 @@ export const envSchema = z.object({
   EXTRACTION_DAILY_LIMIT: z.coerce.number().int().positive().default(200),
   APP_ENV: z.enum(['local', 'demo', 'production']).default('demo'),
   SENTRY_DSN: z.string().optional(),
-});
+}).refine(
+  (data) => {
+    if (data.APP_ENV === 'production') {
+      return (
+        data.FIELD_ENCRYPTION_KEY !== DUMMY_KEY_32 &&
+        data.FIELD_HASH_KEY !== DUMMY_KEY_32
+      );
+    }
+    return true;
+  },
+  {
+    message:
+      'FIELD_ENCRYPTION_KEY dan FIELD_HASH_KEY tidak boleh menggunakan dummy key pada lingkungan production.',
+    path: ['FIELD_ENCRYPTION_KEY'],
+  },
+);
 
 export type Env = z.infer<typeof envSchema>;
 

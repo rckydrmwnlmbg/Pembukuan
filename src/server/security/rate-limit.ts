@@ -32,6 +32,15 @@ export class InMemorySlidingWindowLimiter implements RateLimiterLike {
     const cutoff = now - this.windowMs;
     const prev = (this.hits.get(identifier) ?? []).filter((t) => t > cutoff);
 
+    // Bersihkan entri kedaluwarsa jika map membesar untuk mencegah memory leak
+    if (this.hits.size > 2000) {
+      for (const [key, timestamps] of this.hits.entries()) {
+        if (!timestamps.some((t) => t > cutoff)) {
+          this.hits.delete(key);
+        }
+      }
+    }
+
     if (prev.length >= this.maxRequests) {
       const oldest = prev[0] ?? now;
       return {

@@ -1395,27 +1395,27 @@ export async function processBatchUploadToSupabase(
       );
     }
 
-    // Unggah ke Supabase Storage bucket 'uploads'
+    // Unggah ke Supabase Storage bucket 'uploads' dengan client pengguna terautentikasi (RLS)
     try {
-      const admin = createAdminClient();
-      await admin.storage.createBucket('uploads', { public: false }).catch(() => {});
-      await admin.storage
+      const { error: upErr } = await supabase.storage
         .from('uploads')
         .upload(normalized.storagePath, normalized.bytes, {
           contentType: normalized.mediaType,
           upsert: true,
         });
-    } catch {
-      try {
-        await supabase.storage
+      if (upErr) {
+        // Fallback bila bucket belum terinisialisasi
+        const admin = createAdminClient();
+        await admin.storage.createBucket('uploads', { public: false }).catch(() => {});
+        await admin.storage
           .from('uploads')
           .upload(normalized.storagePath, normalized.bytes, {
             contentType: normalized.mediaType,
             upsert: true,
           });
-      } catch {
-        // Storage upload non-fatal bila bucket belum dibuat di dashboard
       }
+    } catch {
+      // Storage upload non-fatal bila bucket belum dibuat di dashboard
     }
     // Simpan juga di memory cache agar pratinjau selalu dapat diakses seketika
     defaultUploadStore.saveFileBytes(normalized.storagePath, normalized.bytes);
@@ -1777,10 +1777,9 @@ export async function getSupabaseUploadFileBytes(
     };
   }
 
-  // 2. Unduh dari Supabase Storage (coba admin client dulu, lalu client pengguna)
+  // 2. Unduh dari Supabase Storage (coba client pengguna terautentikasi via RLS terlebih dahulu)
   try {
-    const admin = createAdminClient();
-    const { data: fileData, error: dlErr } = await admin.storage
+    const { data: fileData, error: dlErr } = await supabase.storage
       .from('uploads')
       .download(basePath);
 
@@ -1799,7 +1798,8 @@ export async function getSupabaseUploadFileBytes(
   }
 
   try {
-    const { data: fileData, error: dlErr } = await supabase.storage
+    const admin = createAdminClient();
+    const { data: fileData, error: dlErr } = await admin.storage
       .from('uploads')
       .download(basePath);
 
@@ -1979,12 +1979,27 @@ export async function deleteSupabaseUpload(
     );
   }
 
-  const admin = createAdminClient();
-  const { error: delErr } = await admin
+  let delErr;
+  const userDel = await supabase
     .from('uploads')
     .delete()
     .eq('id', uploadId)
     .eq('kitchen_id', kitchenId);
+  delErr = userDel.error;
+
+  if (delErr) {
+    try {
+      const admin = createAdminClient();
+      const adminDel = await admin
+        .from('uploads')
+        .delete()
+        .eq('id', uploadId)
+        .eq('kitchen_id', kitchenId);
+      delErr = adminDel.error;
+    } catch {
+      // Pertahankan delErr awal
+    }
+  }
 
   if (delErr) {
     throw new HttpError(500, `Gagal menghapus berkas unggahan: ${delErr.message}`);
@@ -1992,9 +2007,14 @@ export async function deleteSupabaseUpload(
 
   // Hapus dari Supabase Storage jika ada
   try {
-    await admin.storage.from('uploads').remove([uploadRow.storage_path]);
+    await supabase.storage.from('uploads').remove([uploadRow.storage_path]);
   } catch {
-    // Abaikan jika storage remove gagal atau tidak ada
+    try {
+      const admin = createAdminClient();
+      await admin.storage.from('uploads').remove([uploadRow.storage_path]);
+    } catch {
+      // Abaikan jika storage remove gagal atau tidak ada
+    }
   }
 
   // Hapus juga dari cache lokal jika ada

@@ -407,6 +407,10 @@ export class UploadServiceStore {
   }
 
   public saveFileBytes(storagePath: string, bytes: Uint8Array): void {
+    if (this.fileBytesStore.size >= 30) {
+      const oldestKey = this.fileBytesStore.keys().next().value;
+      if (oldestKey) this.fileBytesStore.delete(oldestKey);
+    }
     this.fileBytesStore.set(storagePath, bytes);
     if (!isDiskSyncEnabled()) return;
     try {
