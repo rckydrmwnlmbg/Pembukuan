@@ -291,15 +291,10 @@ export function ReviewWorkspace({
     if (queue.length === 0) return;
     setErrorMessage(null);
     setIsBatchPosting(true);
-
-    let postedCount = 0;
-    const remainingQueue = [...queue];
+    setBatchProgress({ current: 1, total: queue.length });
 
     try {
-      for (let i = 0; i < queue.length; i++) {
-        const item = queue[i]!;
-        setBatchProgress({ current: i + 1, total: queue.length });
-
+      const items = queue.map((item) => {
         const itemTxDate =
           (item.id === activeItem?.id ? txDate : item.txDate) || '2026-03-28';
         const itemRefNo =
@@ -332,67 +327,75 @@ export function ReviewWorkspace({
             item.suggestedDescription?.toLowerCase().includes('payroll'),
         );
 
-        const res = await fetch(
-          `/api/k/${kitchen.id}/uploads/${item.id}/post`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              periodId: kitchen.periodId,
-              txDate: itemTxDate.trim(),
-              kind: 'outgoing',
-              referenceNo: itemRefNo ? itemRefNo.trim() : null,
-              description: itemDesc || 'Pengeluaran kas dapur',
-              amount: itemCleanAmount,
-              counterpartyAccount: itemRecipientAcc ? itemRecipientAcc.trim() : null,
-              counterpartyName: isPayroll
-                ? 'Rekening Masing-Masing Relawan'
-                : itemRecipientName ? itemRecipientName.trim() : null,
-              counterpartyBank: itemRecipientBank ? itemRecipientBank.trim() : null,
-              note: item.memo || null,
-              includeAdminFee: itemIncludeFee,
-              adminFeeAmount: itemIncludeFee ? itemFeeAmount.replace(/\D/g, '') : undefined,
-              confirmWrongKitchen: true,
-              saveCounterpartyRule: false,
-              isPayrollMassal: isPayroll,
-            }),
-          },
-        );
+        return {
+          uploadId: item.id,
+          periodId: kitchen.periodId,
+          txDate: itemTxDate.trim(),
+          kind: 'outgoing' as const,
+          referenceNo: itemRefNo ? itemRefNo.trim() : null,
+          description: itemDesc || 'Pengeluaran kas dapur',
+          amount: itemCleanAmount || '0',
+          counterpartyAccount: itemRecipientAcc ? itemRecipientAcc.trim() : null,
+          counterpartyName: isPayroll
+            ? 'Rekening Masing-Masing Relawan'
+            : itemRecipientName ? itemRecipientName.trim() : null,
+          counterpartyBank: itemRecipientBank ? itemRecipientBank.trim() : null,
+          note: item.memo || null,
+          includeAdminFee: itemIncludeFee,
+          adminFeeAmount: itemIncludeFee ? itemFeeAmount.replace(/\D/g, '') : undefined,
+          confirmWrongKitchen: true,
+          saveCounterpartyRule: false,
+          isPayrollMassal: isPayroll,
+        };
+      });
 
-        if (!res.ok) {
-          const data = (await res.json().catch(() => ({}))) as {
-            error?: string | { message?: string };
-          };
-          const errDetail =
-            typeof data.error === 'string'
-              ? data.error
-              : data.error?.message || 'Gagal memposting transaksi';
-          throw new Error(
-            `Transaksi #${i + 1} (${item.originalName}): ${errDetail}`,
-          );
-        }
+      const res = await fetch(`/api/k/${kitchen.id}/uploads/batch-post`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
 
-        postedCount++;
-        const removeIdx = remainingQueue.findIndex((q) => q.id === item.id);
-        if (removeIdx !== -1) {
-          remainingQueue.splice(removeIdx, 1);
-        }
+      const data = (await res.json().catch(() => ({}))) as {
+        postedCount?: number;
+        errors?: Array<{ uploadId: string; message: string }>;
+        error?: string | { message?: string };
+      };
+
+      if (!res.ok && (!data.postedCount || data.postedCount === 0)) {
+        const errDetail =
+          typeof data.error === 'string'
+            ? data.error
+            : data.error?.message || 'Gagal memproses batch posting';
+        throw new Error(errDetail);
       }
 
-      setQueue([]);
-      setActiveIndex(0);
-      setShowBatchConfirm(false);
-      setToastMessage(
-        `Semua ${postedCount} transaksi berhasil diposting ke buku kas!`,
-      );
+      const postedCount = data.postedCount ?? items.length;
+      setBatchProgress({ current: postedCount, total: items.length });
+
+      if (data.errors && data.errors.length > 0) {
+        const failedIds = new Set(data.errors.map((e) => e.uploadId));
+        const remainingQueue = queue.filter((q) => failedIds.has(q.id));
+        setQueue(remainingQueue);
+        setActiveIndex(0);
+        setShowBatchConfirm(false);
+        setErrorMessage(
+          `Berhasil memposting ${postedCount} transaksi. Terdapat ${data.errors.length} transaksi yang perlu diperiksa manual.`,
+        );
+      } else {
+        setQueue([]);
+        setActiveIndex(0);
+        setShowBatchConfirm(false);
+        setToastMessage(
+          `Semua ${postedCount} transaksi berhasil diposting ke buku kas dalam 1 proses cepat!`,
+        );
+      }
+
       router.refresh();
     } catch (err: unknown) {
-      setQueue([...remainingQueue]);
-      setActiveIndex(0);
       setShowBatchConfirm(false);
       setErrorMessage(
         err instanceof Error
-          ? `${err.message}. Sebanyak ${postedCount} transaksi sebelumnya telah berhasil dicatat ke buku kas.`
+          ? err.message
           : 'Terjadi kesalahan saat memposting transaksi massal.',
       );
     } finally {

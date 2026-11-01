@@ -137,6 +137,8 @@ export function LedgerWorkspace({
   const [statusFilter, setStatusFilter] = useState<'all' | 'posted' | 'void'>(
     'all',
   );
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Sinkronisasi data rows & summary saat user berpindah periode atau props diperbarui
   useEffect(() => {
@@ -144,6 +146,7 @@ export function LedgerWorkspace({
     setSummary(initialSummary);
     setSearchQuery('');
     setStatusFilter('all');
+    setCurrentPage(1);
   }, [initialRows, initialSummary, kitchen.periodId]);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -285,7 +288,10 @@ export function LedgerWorkspace({
         });
         return;
       }
-      if (data.rows) setRows(data.rows);
+      if (data.rows) {
+        setRows(data.rows);
+        setCurrentPage(1);
+      }
       if (data.summary) setSummary(data.summary);
     } catch {
       setBannerMessage({
@@ -509,6 +515,13 @@ export function LedgerWorkspace({
     isSubmitting ||
     addPeriodLoading ||
     editOpeningLoading;
+
+  const totalPages =
+    pageSize > 0 ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
+  const paginatedRows =
+    pageSize > 0
+      ? rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+      : rows;
 
   return (
     <div className="space-y-4">
@@ -906,7 +919,7 @@ export function LedgerWorkspace({
               )}
 
               {/* Baris 2..N: Transaksi Buku Kas */}
-              {rows.map((row) => {
+              {paginatedRows.map((row) => {
                 const isVoid = row.status === 'void';
                 const debitBig = BigInt(row.debit);
                 const creditBig = BigInt(row.credit);
@@ -1036,6 +1049,77 @@ export function LedgerWorkspace({
             </tfoot>
           </table>
         </div>
+
+        {/* Kontrol Paginasi untuk Performa Beban Data Banyak */}
+        {rows.length > 50 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-[var(--surface-subtle)] px-4 py-2.5 text-xs text-[var(--ink-secondary)]">
+            <div className="flex items-center gap-2">
+              <span>Baris per halaman:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="rounded border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink-primary)] font-medium focus:outline-none"
+              >
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={0}>Semua ({rows.length})</option>
+              </select>
+              <span className="text-[var(--ink-muted)]">|</span>
+              <span>
+                {pageSize > 0 ? (
+                  <>
+                    Menampilkan{' '}
+                    <strong className="text-[var(--ink-primary)]">
+                      {(currentPage - 1) * pageSize + 1}–
+                      {Math.min(currentPage * pageSize, rows.length)}
+                    </strong>{' '}
+                    dari{' '}
+                    <strong className="text-[var(--ink-primary)]">
+                      {rows.length}
+                    </strong>{' '}
+                    transaksi
+                  </>
+                ) : (
+                  <>
+                    Menampilkan seluruh{' '}
+                    <strong className="text-[var(--ink-primary)]">
+                      {rows.length}
+                    </strong>{' '}
+                    transaksi
+                  </>
+                )}
+              </span>
+            </div>
+
+            {pageSize > 0 && totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  Sebelumnya
+                </Button>
+                <span className="px-2 font-medium text-[var(--ink-primary)]">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Berikutnya
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Panel Samping 480px untuk Tambah / Edit / Batalkan Transaksi (DESIGN.md §8.4) */}

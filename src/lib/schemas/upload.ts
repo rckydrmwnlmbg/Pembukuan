@@ -87,3 +87,18 @@ export const PostUploadReviewBodySchema = z
   .strict();
 
 export type PostUploadReviewInput = z.infer<typeof PostUploadReviewBodySchema>;
+
+export const BatchPostUploadItemSchema = PostUploadReviewBodySchema.extend({
+  uploadId: UuidSchema,
+});
+
+export const BatchPostUploadBodySchema = z
+  .object({
+    items: z
+      .array(BatchPostUploadItemSchema)
+      .min(1, 'Minimal 1 transaksi untuk diposting.')
+      .max(100, 'Maksimal 100 transaksi per batch posting.'),
+  })
+  .strict();
+
+export type BatchPostUploadInput = z.infer<typeof BatchPostUploadBodySchema>;
