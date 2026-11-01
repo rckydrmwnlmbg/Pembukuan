@@ -1014,7 +1014,12 @@ export function ReviewWorkspace({
                     kitchen.periodStatus === 'locked'
                   }
                 >
-                  {isSubmitting ? 'Menyimpan...' : 'Simpan dan lanjut'}
+                  <span>{isSubmitting ? 'Menyimpan...' : 'Simpan dan lanjut'}</span>
+                  {!isSubmitting && (
+                    <kbd className="ml-1.5 rounded bg-white/20 px-1.5 py-0.5 text-[10px] font-sans font-medium text-white/90">
+                      Ctrl+↵
+                    </kbd>
+                  )}
                 </Button>
               </div>
             </div>
@@ -1022,8 +1027,8 @@ export function ReviewWorkspace({
 
           {/* Modal Konfirmasi Tolak Berkas */}
           {showRejectConfirm && activeItem && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-              <div className="w-full max-w-md rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl space-y-4">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl border border-[var(--line-strong)] bg-[var(--surface)] p-6 shadow-lg space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-[var(--danger,#c5221f)]">
                     Tolak dan Hapus Berkas dari Antrean?
@@ -1066,8 +1071,8 @@ export function ReviewWorkspace({
 
           {/* Modal Konfirmasi Posting Semua Transaksi Massal */}
           {showBatchConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-              <div className="w-full max-w-md rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl space-y-4">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl border border-[var(--line-strong)] bg-[var(--surface)] p-6 shadow-lg space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-[var(--ink-primary)]">
                     Posting Semua {queue.length} Transaksi ke Buku Kas?

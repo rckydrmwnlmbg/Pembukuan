@@ -743,7 +743,7 @@ export function LedgerWorkspace({
       {/* Tabel Buku Kas 11 Kolom Format Plombokan (DESIGN.md §5.3) */}
       <div className="relative overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface)] shadow-2xs">
         {(isPending || isLoading) && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/75 backdrop-blur-[1px] transition-all">
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/85 transition-all">
             <div className="flex items-center gap-3 px-5 py-3 rounded-lg bg-[var(--surface)] border border-[var(--line-strong)] shadow-lg">
               <div className="h-4 w-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin shrink-0" />
               <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">
@@ -1469,8 +1469,8 @@ export function LedgerWorkspace({
 
       {/* Modal Buka Periode Baru */}
       {showAddPeriodModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl border border-[var(--line-strong)] bg-[var(--surface)] p-6 shadow-lg space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-[var(--accent)]" />
@@ -1574,8 +1574,8 @@ export function LedgerWorkspace({
 
       {/* Modal Ubah Saldo Awal Periode */}
       {showEditOpeningModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl border border-[var(--line-strong)] bg-[var(--surface)] p-6 shadow-lg space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
               <div>
                 <h3 className="text-sm font-bold text-[var(--ink)]">

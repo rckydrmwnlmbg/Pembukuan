@@ -53,7 +53,7 @@ export default function SetPasswordPage() {
 
   return (
     <div className="min-h-screen bg-[var(--canvas)] flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-xl space-y-6">
+      <div className="w-full max-w-md rounded-xl border border-[var(--line-strong)] bg-[var(--surface)] p-6 shadow-lg space-y-6">
         <div className="flex items-center gap-2.5 border-b border-[var(--line)] pb-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent-subtle)] text-[var(--accent)]">
             <Lock className="h-5 w-5" />

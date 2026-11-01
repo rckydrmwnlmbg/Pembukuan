@@ -310,34 +310,33 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Kolom Kanan: Ilustrasi Pratinjau Produk Nyata */}
-      <div className="hidden lg:flex flex-col justify-center items-center bg-[var(--surface-muted)] p-12 border-l border-[var(--line)]">
+      {/* Kolom Kanan: Petrol Solid (#0B4F6C) sesuai DESIGN.md §7 */}
+      <div className="hidden lg:flex flex-col justify-center items-center bg-[var(--accent)] p-12 text-white">
         <div className="w-full max-w-md space-y-6">
           <div className="text-left space-y-2">
-            <span className="text-xs font-semibold text-[var(--accent)] uppercase tracking-wider">
-              Pembukuan Terisolasi Per Dapur
-            </span>
-            <h2 className="text-xl font-bold tracking-tight text-[var(--ink)]">
-              Dari bukti transfer ke buku kas Excel secara otomatis.
+            <h2 className="text-xl font-medium tracking-tight text-white leading-snug">
+              Setiap dapur punya buku dan saldonya sendiri.
             </h2>
-            <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
-              Setiap dapur memiliki buku kas, saldo, dan rekening terpisah. Didukung verifikasi manusia sebelum posting dan ekspor Excel format Plombokan.
+            <p className="text-xs text-white/80 leading-relaxed">
+              Dari bukti transfer ke buku kas Excel secara otomatis, dengan verifikasi manusia sebelum posting dan ekspor format Plombokan.
             </p>
           </div>
 
-          {/* Strip Persamaan Pratinjau */}
-          <PeriodEquation
-            kitchenId="demo"
-            periodStatus="open"
-            openingBalance={15000000n}
-            totalIncoming={32500000n}
-            totalOutgoing={18750000n}
-            closingBalance={28750000n}
-            incomingCount={4}
-            outgoingCount={12}
-            draftCount={0}
-            variant="compact"
-          />
+          {/* Strip Persamaan Pratinjau (Komponen Asli, Data Contoh) */}
+          <div className="rounded-lg bg-[var(--surface)] p-1 text-[var(--ink)] shadow-sm">
+            <PeriodEquation
+              kitchenId="demo"
+              periodStatus="open"
+              openingBalance={15000000n}
+              totalIncoming={32500000n}
+              totalOutgoing={18750000n}
+              closingBalance={28750000n}
+              incomingCount={4}
+              outgoingCount={12}
+              draftCount={0}
+              variant="compact"
+            />
+          </div>
         </div>
       </div>
     </div>

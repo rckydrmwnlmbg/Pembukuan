@@ -130,7 +130,7 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
       {isMobileOpen && (
         <div
           onClick={() => setIsMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
         />
       )}
 
@@ -186,7 +186,7 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
 
           {/* Dropdown Menu */}
           {isDropdownOpen && (
-            <div className="absolute left-3 right-3 top-[76px] z-50 rounded-lg border border-[var(--line)] bg-[var(--surface)] shadow-xl p-1.5 space-y-1">
+            <div className="absolute left-3 right-3 top-[76px] z-50 rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] shadow-lg p-1.5 space-y-1">
               <div className="max-h-48 overflow-y-auto space-y-0.5">
                 {kitchens.map((k) => {
                   const isSelected = activeKitchen?.id === k.id;

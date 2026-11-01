@@ -95,8 +95,8 @@ export function AddKitchenModal({ isOpen, onClose }: AddKitchenModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-lg rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg rounded-xl border border-[var(--line-strong)] bg-[var(--surface)] shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header Modal */}
         <div className="flex items-center justify-between border-b border-[var(--line)] px-6 py-4 bg-[var(--surface-muted)]">
           <div className="flex items-center gap-2.5">
