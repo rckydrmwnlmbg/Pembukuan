@@ -538,25 +538,40 @@ export function LedgerWorkspace({
       )}
 
       {/* Header Konteks Dapur Aktif */}
-      <div className="flex flex-col gap-4 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-2xs lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="text-xs text-[var(--ink-muted)]">
+            <span>Kasdapur</span>
+            <span className="mx-1.5 text-[var(--line-strong)]">/</span>
+            <span className="font-medium text-[var(--ink)]">{kitchen.name}</span>
+            <span className="mx-1.5 text-[var(--line-strong)]">/</span>
+            <span>Buku Kas</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-bold tracking-tight text-[var(--ink)]">
               {kitchen.name}
             </h1>
-            <Badge tone="neutral">{kitchen.code}</Badge>
-            <Badge tone={isLocked ? 'neutral' : 'accent'}>
-              {isLocked ? 'Periode Terkunci' : 'Periode Terbuka'}
-            </Badge>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border border-[var(--line)] bg-[var(--surface-muted)] text-[var(--ink-muted)]">
+              {kitchen.code}
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border border-[var(--line)] bg-[var(--surface-muted)] text-[var(--ink-muted)]">
+              <span
+                className={`inline-block w-1.5 h-1.5 rounded-full ${
+                  isLocked ? 'bg-[var(--ink-muted)]' : 'bg-[var(--ok)]'
+                }`}
+              />
+              <span>{isLocked ? 'Terkunci' : 'Terbuka'}</span>
+            </span>
 
             {/* Pemilih Periode Pembukuan - Selalu Interaktif & Dapat Diklik */}
-            <div className="flex items-center gap-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface-muted)] px-2.5 py-1">
+            <div className="flex items-center gap-1.5 rounded-md border border-[var(--line-strong)] bg-[var(--surface-muted)] px-2.5 py-1">
               {isPending ? (
                 <div className="h-3.5 w-3.5 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin shrink-0" />
               ) : (
                 <Calendar className="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
               )}
-              <span className="text-[11px] font-medium text-[var(--ink-muted)]">Periode:</span>
+              <span className="text-xs font-medium text-[var(--ink-muted)]">Periode:</span>
               <select
                 value={kitchen.periodId}
                 disabled={isPending}
@@ -572,7 +587,7 @@ export function LedgerWorkspace({
                   }
                 }}
                 aria-label="Pilih Periode Pembukuan"
-                className="bg-transparent text-xs font-semibold text-[var(--ink)] focus:outline-none cursor-pointer disabled:opacity-50"
+                className="bg-transparent text-xs font-medium text-[var(--ink)] focus:outline-none cursor-pointer disabled:opacity-50"
               >
                 {availablePeriods.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -586,14 +601,14 @@ export function LedgerWorkspace({
             <button
               type="button"
               onClick={() => setShowAddPeriodModal(true)}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--accent)] hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline"
             >
               + Periode Baru
             </button>
           </div>
           <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
-            Buku kas {kitchen.periodLabel} &bull; PJ: <span className="font-semibold text-[var(--ink)]">{kitchen.pjName}</span> &bull; Rekening {kitchen.bankName} {kitchen.accountNumberMasked} &bull; Biaya admin{' '}
-            <span className="font-semibold tabular-nums text-[var(--ink)]">
+            Buku kas {kitchen.periodLabel} &bull; PJ: <span className="font-medium text-[var(--ink)]">{kitchen.pjName}</span> &bull; Rekening {kitchen.bankName} {kitchen.accountNumberMasked} &bull; Biaya admin{' '}
+            <span className="font-medium tabular-nums text-[var(--ink)]">
               {formatRupiah(BigInt(kitchen.adminFeeDefault))}
             </span>
           </p>
@@ -602,19 +617,19 @@ export function LedgerWorkspace({
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href={`/k/${kitchen.id}/review`}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--accent)] px-3.5 text-xs font-semibold text-white shadow-2xs hover:bg-[var(--accent-hover)] transition-colors"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[var(--accent)] px-3 text-xs font-medium text-white hover:bg-[var(--accent-hover)] transition-colors"
           >
             <UploadCloud className="h-4 w-4" />
             <span>Unggah Bukti</span>
             {reviewQueueCount > 0 && (
-              <span className="ml-1 rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">
+              <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.2 text-[10px] font-bold text-white">
                 {reviewQueueCount}
               </span>
             )}
           </Link>
           <a
             href={`/api/k/${kitchen.id}/export/xlsx?periodId=${kitchen.periodId}`}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors"
           >
             <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--ok)]" />
             <span>Unduh Excel (.xlsx)</span>

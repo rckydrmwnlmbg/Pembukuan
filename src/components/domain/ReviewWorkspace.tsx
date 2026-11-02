@@ -431,27 +431,40 @@ export function ReviewWorkspace({
       )}
 
       {/* Header Halaman Review */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line-subtle bg-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight text-ink-primary">
-              Review bukti transfer {kitchen.name}
-            </h1>
-            <Badge tone="neutral">{kitchen.code}</Badge>
-            <Badge tone={kitchen.periodStatus === 'locked' ? 'neutral' : 'accent'}>
-              Periode {kitchen.periodLabel} (
-              {kitchen.periodStatus === 'locked' ? 'Terkunci' : 'Terbuka'})
-            </Badge>
+          <div className="text-xs text-[var(--ink-muted)] mb-1">
+            <span>Kasdapur</span>
+            <span className="mx-1.5 text-[var(--line-strong)]">/</span>
+            <span className="font-medium text-[var(--ink)]">{kitchen.name}</span>
+            <span className="mx-1.5 text-[var(--line-strong)]">/</span>
+            <span>Review Bukti Transfer</span>
           </div>
-          <p className="mt-1 text-xs text-ink-secondary">
-            Periksa hasil bacaan bukti transfer berdampingan dengan berkas asli
-            sebelum disimpan ke buku kas.
+
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--ink)]">
+              Review Bukti Transfer
+            </h1>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border border-[var(--line)] bg-[var(--surface-muted)] text-[var(--ink-muted)]">
+              {kitchen.code}
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border border-[var(--line)] bg-[var(--surface-muted)] text-[var(--ink-muted)]">
+              <span
+                className={`inline-block w-1.5 h-1.5 rounded-full ${
+                  kitchen.periodStatus === 'locked' ? 'bg-[var(--ink-muted)]' : 'bg-[var(--ok)]'
+                }`}
+              />
+              <span>Periode {kitchen.periodLabel} ({kitchen.periodStatus === 'locked' ? 'Terkunci' : 'Terbuka'})</span>
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-[var(--ink-muted)]">
+            Periksa hasil bacaan bukti transfer berdampingan dengan berkas asli sebelum diposting ke buku kas.
           </p>
         </div>
 
         <Link
           href={`/k/${kitchen.id}/ledger`}
-          className="inline-flex h-9 items-center justify-center rounded-md border border-line-strong bg-surface px-3.5 text-sm font-medium text-ink-primary transition-colors hover:bg-surface-subtle"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors"
         >
           Lihat Buku Kas
         </Link>

@@ -3,7 +3,6 @@
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   Lock,
   Unlock,
   AlertTriangle,
@@ -506,19 +505,24 @@ export default function KitchenSettingsPage({
 
   return (
     <div className="space-y-6">
-      {/* Navigasi atas */}
+      {/* Navigasi atas & Breadcrumb */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link
-            href={`/k/${kitchenId}/ledger`}
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] font-medium"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Kembali ke Buku Kas
-          </Link>
-          <span className="text-xs font-medium text-[var(--ink-muted)]">
-            {settings.name} ({settings.code})
-          </span>
+        <div>
+          <div className="text-xs text-[var(--ink-muted)] mb-1">
+            <span>Kasdapur</span>
+            <span className="mx-1.5 text-[var(--line-strong)]">/</span>
+            <span className="font-medium text-[var(--ink)]">{settings.name}</span>
+            <span className="mx-1.5 text-[var(--line-strong)]">/</span>
+            <span>Pengaturan Dapur</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--ink)]">
+              Pengaturan {settings.name}
+            </h1>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border border-[var(--line)] bg-[var(--surface-muted)] text-[var(--ink-muted)]">
+              {settings.code}
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">

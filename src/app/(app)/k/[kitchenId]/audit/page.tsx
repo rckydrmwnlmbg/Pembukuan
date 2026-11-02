@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, History, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, ShieldAlert } from 'lucide-react';
 import { formatTimestampWib } from '@/lib/format';
 
 interface AuditRecord {
@@ -124,22 +124,34 @@ export default function KitchenAuditPage({
 
   return (
     <div className="space-y-6">
-      {/* Navigasi atas */}
+      {/* Navigasi atas & Breadcrumb */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div>
+          <div className="text-xs text-[var(--ink-muted)] mb-1">
+            <span>Kasdapur</span>
+            <span className="mx-1.5 text-[var(--line-strong)]">/</span>
+            <span className="font-medium text-[var(--ink)]">{kitchen?.name}</span>
+            <span className="mx-1.5 text-[var(--line-strong)]">/</span>
+            <span>Riwayat Perubahan</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--ink)]">
+              Riwayat Perubahan (Audit Log)
+            </h1>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border border-[var(--line)] bg-[var(--surface-muted)] text-[var(--ink-muted)]">
+              {kitchen?.code}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
           <Link
             href={`/k/${kitchenId}/ledger`}
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--ink-muted)] hover:text-[var(--ink)] font-medium"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Kembali ke Buku Kas
           </Link>
-          <span className="text-xs font-medium text-[var(--ink-muted)]">
-            {kitchen?.name} ({kitchen?.code})
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
           <Link
             href={`/k/${kitchenId}/settings`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] text-xs font-medium text-[var(--ink)] hover:bg-[var(--surface-muted)] transition-colors"
@@ -149,21 +161,15 @@ export default function KitchenAuditPage({
         </div>
       </div>
 
-        {errorMsg && (
-          <div className="p-3.5 rounded-md bg-[var(--danger-subtle)] border border-[var(--danger)] text-xs text-[var(--danger)]">
-            {errorMsg}
-          </div>
-        )}
-
-      {/* Header Judul */}
-      <div className="border-b border-[var(--line)] pb-4">
-        <div className="flex items-center gap-2">
-          <History className="w-5 h-5 text-[var(--ink-muted)]" />
-          <h1 className="text-lg font-semibold text-[var(--ink)]">
-            Riwayat Perubahan (Audit Log)
-          </h1>
+      {errorMsg && (
+        <div className="p-3.5 rounded-md bg-[var(--danger-subtle)] border border-[var(--danger)] text-xs text-[var(--danger)]">
+          {errorMsg}
         </div>
-        <p className="mt-1 text-xs text-[var(--ink-muted)]">
+      )}
+
+      {/* Header Keterangan */}
+      <div className="border-b border-[var(--line)] pb-2">
+        <p className="text-xs text-[var(--ink-muted)] leading-relaxed">
           Catatan permanen append-only untuk setiap aksi penulisan, kunci periode,
           dan pembatalan pada dapur {kitchen?.name}. Tidak dapat diubah atau dihapus (SECURITY S-15).
         </p>

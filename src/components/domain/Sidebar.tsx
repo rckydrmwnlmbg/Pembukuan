@@ -159,14 +159,14 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
 
         {/* 2. Kitchen Selector Dropdown */}
         <div className="p-3 border-b border-[var(--line)] relative">
-          <div className="text-[10px] font-semibold tracking-wider text-[var(--ink-subtle)] uppercase px-1 mb-1.5">
-            Dapur Aktif
+          <div className="text-xs font-medium text-[var(--ink-muted)] px-1 mb-1.5">
+            Dapur aktif
           </div>
 
           <button
             type="button"
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex w-full items-center justify-between rounded-lg border border-[var(--line-strong)] bg-[var(--surface-muted)] p-2 text-left hover:border-[var(--accent-line)] hover:bg-[var(--surface)] transition-all"
+            className="flex w-full items-center justify-between rounded-md border border-[var(--line-strong)] bg-[var(--surface-muted)] p-2 text-left hover:border-[var(--accent-line)] hover:bg-[var(--surface)] transition-all"
           >
             <div className="flex items-center gap-2 overflow-hidden">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent-subtle)] text-[var(--accent)] font-semibold text-xs">
@@ -176,7 +176,7 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
                 <div className="text-xs font-semibold text-[var(--ink)] truncate">
                   {activeKitchen ? activeKitchen.name : 'Pilih Dapur'}
                 </div>
-                <div className="text-[10px] text-[var(--ink-muted)] truncate">
+                <div className="text-[11px] text-[var(--ink-muted)] truncate">
                   {activeKitchen ? `${activeKitchen.code} • ${activeKitchen.bankCode || 'Bank'}` : 'Belum ada dapur'}
                 </div>
               </div>
@@ -246,8 +246,8 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
 
         {/* 3. Navigation Links */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          <div className="text-[10px] font-semibold tracking-wider text-[var(--ink-subtle)] uppercase px-2 mb-1.5">
-            Menu Utama
+          <div className="text-xs font-medium text-[var(--ink-muted)] px-2 mb-1.5">
+            Navigasi
           </div>
 
           {navItems.map((item) => {
@@ -257,9 +257,9 @@ export function Sidebar({ kitchens, userEmail = 'Maker Keuangan' }: SidebarProps
                 key={item.label}
                 href={item.href}
                 onClick={() => setIsMobileOpen(false)}
-                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                className={`relative flex items-center gap-2.5 rounded-md px-3 h-9 text-xs font-medium transition-colors ${
                   item.isActive
-                    ? 'bg-[var(--accent-subtle)] text-[var(--accent)] font-semibold shadow-2xs'
+                    ? 'bg-[var(--accent-subtle)] text-[var(--accent)] font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-full before:bg-[var(--accent)]'
                     : 'text-[var(--ink)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]'
                 }`}
               >
